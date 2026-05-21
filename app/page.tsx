@@ -1,11 +1,8 @@
-// Home — full-bleed 3D constellation with floating UI overlays.
-// The scene itself is client-only (R3F needs WebGL), so we dynamic-import it
-// to keep the server bundle small and avoid SSR errors.
+// Home — full-bleed 3D scene with floating UI overlays.
 
 import { promises as fs } from "node:fs";
 import { join } from "node:path";
-import HeroOverlay from "./components/HeroOverlay";
-import SceneWrapper from "./SceneWrapper";
+import ClientShell from "./ClientShell";
 
 interface LibraryFile {
   generatedAt: string;
@@ -44,7 +41,7 @@ interface LibraryFile {
   layout: {
     nodes: Array<{
       id: string;
-      kind: "trunk" | "category" | "subcategory" | "entry" | "ambient";
+      kind: "category" | "subcategory" | "entry" | "filler";
       name?: string;
       color: [number, number, number];
       rawColor?: string | null;
@@ -69,11 +66,9 @@ async function loadLibrary(): Promise<LibraryFile | null> {
 
 export default async function Home() {
   const library = await loadLibrary();
-
   return (
-    <main className="scene-container">
-      {library ? <SceneWrapper library={library} /> : null}
-      <HeroOverlay stats={library?.stats ?? null} />
+    <main className="ne-scene">
+      <ClientShell library={library} />
     </main>
   );
 }

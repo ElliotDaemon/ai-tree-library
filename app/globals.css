@@ -8,6 +8,8 @@
   --fg: #e2e8f0;
   --muted: #8b9bb4;
   --dim: #566b8e;
+  --panel-bg: rgba(7, 12, 23, 0.7);
+  --border: rgba(0, 243, 255, 0.3);
 }
 
 @theme inline {
@@ -27,7 +29,6 @@ html, body {
 }
 
 body {
-  /* Subtle nebula on top of the near-black */
   background:
     radial-gradient(ellipse at 25% 15%, rgba(112, 0, 255, 0.10), transparent 55%),
     radial-gradient(ellipse at 75% 85%, rgba(0, 243, 255, 0.06), transparent 50%),
@@ -35,13 +36,12 @@ body {
     var(--bg);
 }
 
-.scene-container {
+.ne-scene {
   position: fixed;
   inset: 0;
-  overflow: hidden;
 }
 
-/* ---------------- Hero overlay ---------------- */
+/* ---------------- Header (top-left) ---------------- */
 
 .ne-header {
   position: fixed;
@@ -49,9 +49,15 @@ body {
   left: 0;
   padding: 2.5rem;
   z-index: 10;
-  background: linear-gradient(180deg, rgba(3, 5, 8, 0.85) 0%, rgba(3, 5, 8, 0) 100%);
+  background: linear-gradient(180deg, rgba(3, 5, 8, 0.9) 0%, rgba(3, 5, 8, 0) 100%);
   pointer-events: none;
   max-width: 36rem;
+  transition: transform 0.5s ease, opacity 0.5s ease;
+}
+
+.ne-header.ne-hidden-up {
+  transform: translateY(-100%);
+  opacity: 0;
 }
 
 .ne-title {
@@ -102,48 +108,49 @@ body {
   color: var(--muted);
   text-transform: uppercase;
   background: linear-gradient(180deg, rgba(3, 5, 8, 0.85) 0%, rgba(3, 5, 8, 0) 100%);
+  transition: transform 0.5s ease, opacity 0.5s ease;
 }
 
-.ne-stat-line {
-  margin-bottom: 0.3rem;
-}
+.ne-stats.ne-hidden-up { transform: translateY(-100%); opacity: 0; }
 
-.ne-stat-value {
-  color: var(--primary);
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  text-shadow: 0 0 6px rgba(0, 243, 255, 0.35);
-}
+.ne-stat-line { margin-bottom: 0.3rem; }
+.ne-stat-value { color: var(--primary); font-weight: 600; font-variant-numeric: tabular-nums; text-shadow: 0 0 6px rgba(0, 243, 255, 0.35); }
+.ne-stat-sep { margin: 0 0.4rem; color: var(--dim); }
+.ne-stats-warn { color: #fbbf24; }
 
-.ne-stat-label {
-  color: var(--muted);
-}
+/* ---------------- Footer (bottom) ---------------- */
 
-.ne-stat-sep {
-  margin: 0 0.4rem;
-  color: var(--dim);
-}
-
-.ne-stats-warn {
-  color: #fbbf24;
-}
-
-/* ---------------- Controls hint (bottom) ---------------- */
-
-.ne-controls-hint {
+.ne-footer {
   position: fixed;
   bottom: 0;
   left: 0;
   right: 0;
-  padding: 1.5rem 2.5rem;
+  padding: 2rem 2.5rem;
   z-index: 10;
-  text-align: center;
+  background: linear-gradient(0deg, rgba(3, 5, 8, 0.9) 0%, rgba(3, 5, 8, 0) 100%);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
   pointer-events: none;
+  transition: transform 0.5s ease, opacity 0.5s ease;
+}
+
+.ne-footer.ne-hidden-down {
+  transform: translateY(100%);
+  opacity: 0;
+}
+
+.ne-footer-hint {
+  text-align: right;
   color: var(--dim);
-  font-size: 0.7rem;
+  font-size: 0.72rem;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  background: linear-gradient(0deg, rgba(3, 5, 8, 0.85) 0%, rgba(3, 5, 8, 0) 100%);
+  line-height: 1.6;
+}
+
+.ne-footer-hint strong {
+  color: var(--primary);
 }
 
 .ne-key {
@@ -159,82 +166,300 @@ body {
   background: rgba(0, 243, 255, 0.05);
 }
 
-/* ---------------- Center reticle ---------------- */
+/* ---------------- Spaceship toggle ---------------- */
 
-.ne-reticle {
+.ne-ship-btn {
+  pointer-events: auto;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: rgba(0, 243, 255, 0.05);
+  border: 1px solid var(--primary);
+  color: var(--primary);
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  box-shadow: 0 0 15px rgba(0, 243, 255, 0.1);
+}
+
+.ne-ship-btn:hover {
+  background: rgba(0, 243, 255, 0.15);
+  box-shadow: 0 0 20px rgba(0, 243, 255, 0.4);
+  transform: scale(1.08);
+}
+
+.ne-ship-btn.active {
+  background: rgba(255, 0, 170, 0.15);
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: 0 0 25px rgba(255, 0, 170, 0.4);
+}
+
+/* ---------------- Crosshair ---------------- */
+
+.ne-crosshair {
   position: fixed;
   top: 50%;
   left: 50%;
-  width: 28px;
-  height: 28px;
-  transform: translate(-50%, -50%);
-  border: 1px solid rgba(0, 243, 255, 0.35);
-  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  transform: translate(-50%, -50%) scale(0.5);
   pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.2s, transform 0.2s;
   z-index: 8;
-  display: flex;
-  align-items: center;
-  justify-content: center;
 }
 
-.ne-reticle-dot {
-  width: 3px;
-  height: 3px;
-  background: rgba(0, 243, 255, 0.7);
-  border-radius: 50%;
-  box-shadow: 0 0 6px rgba(0, 243, 255, 0.8);
+.ne-crosshair-h, .ne-crosshair-v {
+  position: absolute;
+  background: var(--primary);
+  box-shadow: 0 0 8px var(--primary);
+}
+.ne-crosshair-h { top: 50%; left: 0; right: 0; height: 1px; }
+.ne-crosshair-v { left: 50%; top: 0; bottom: 0; width: 1px; }
+
+.ne-crosshair.active {
+  opacity: 0.7;
+  transform: translate(-50%, -50%) scale(1);
 }
 
-/* ---------------- In-scene tooltip (rendered via <Html>) ---------------- */
+.ne-crosshair.flight {
+  opacity: 0.3;
+  transform: translate(-50%, -50%) scale(0.7);
+}
+
+.ne-crosshair.flight.active {
+  opacity: 0.85;
+}
+
+/* ---------------- Hover tooltip (cursor-following) ---------------- */
 
 .ne-tooltip {
-  background: rgba(4, 13, 26, 0.88);
-  border: 1px solid rgba(0, 243, 255, 0.55);
-  border-radius: 4px;
-  padding: 0.4rem 0.7rem;
-  color: #fff;
-  font-size: 11px;
-  line-height: 1.3;
-  white-space: nowrap;
-  max-width: 280px;
-  box-shadow:
-    0 4px 18px rgba(0, 243, 255, 0.18),
-    inset 0 0 10px rgba(0, 243, 255, 0.08);
-  backdrop-filter: blur(8px);
+  position: fixed;
   pointer-events: none;
+  z-index: 30;
+  background: rgba(4, 13, 26, 0.85);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--primary);
+  padding: 8px 14px;
+  transform: translate(0, -50%);
+  box-shadow: 0 4px 20px rgba(0, 243, 255, 0.1);
+  backdrop-filter: blur(4px);
+  max-width: 22rem;
+  font-size: 12px;
+}
+
+.ne-tooltip-cat {
+  font-size: 10px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 2px;
 }
 
 .ne-tooltip-name {
   font-weight: 600;
-  letter-spacing: 0.06em;
-  color: var(--primary);
-  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: #fff;
+  font-size: 14px;
   text-transform: uppercase;
-  margin-bottom: 2px;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
-.ne-tooltip-status {
-  font-size: 9px;
-  color: #a4b5d0;
+/* ---------------- Data Panel (right side, dive) ---------------- */
+
+.ne-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 26rem;
+  max-width: 90vw;
+  height: 100vh;
+  background: var(--panel-bg);
+  backdrop-filter: blur(12px);
+  border-left: 1px solid var(--border);
+  padding: 3rem 2.5rem;
+  box-sizing: border-box;
+  transform: translateX(100%);
+  transition: transform 0.6s cubic-bezier(0.19, 1, 0.22, 1);
+  z-index: 20;
   display: flex;
-  align-items: center;
-  gap: 4px;
-  letter-spacing: 0.1em;
+  flex-direction: column;
+  box-shadow: -10px 0 30px rgba(0, 0, 0, 0.5);
+  pointer-events: auto;
 }
 
-.ne-tooltip-status::before {
-  content: "";
+.ne-panel.active {
+  transform: translateX(0);
+}
+
+.ne-panel-header { margin-bottom: 1.5rem; }
+
+.ne-panel-badge {
   display: inline-block;
-  width: 0.4rem;
-  height: 0.4rem;
-  background: #00ff66;
-  border-radius: 50%;
-  box-shadow: 0 0 5px #00ff66;
+  padding: 4px 12px;
+  background: rgba(0, 243, 255, 0.06);
+  border: 1px solid var(--primary);
+  color: var(--primary);
+  font-size: 0.65rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  border-radius: 20px;
+  margin-bottom: 1rem;
 }
 
-/* ---------------- Empty-state ---------------- */
+.ne-panel-title {
+  font-size: 1.8rem;
+  font-weight: 300;
+  margin: 0 0 1rem 0;
+  color: #fff;
+  line-height: 1.2;
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
+}
+
+.ne-panel-desc {
+  font-size: 0.9rem;
+  color: #a4b5d0;
+  line-height: 1.6;
+  margin: 0 0 1.5rem 0;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.ne-panel-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 1.25rem;
+}
+
+.ne-panel-link {
+  display: block;
+  text-align: center;
+  padding: 0.7rem;
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border: 1px solid var(--primary);
+  color: var(--primary);
+  background: transparent;
+  text-decoration: none;
+  margin-bottom: 1.25rem;
+  transition: background 0.2s ease, box-shadow 0.2s ease;
+}
+
+.ne-panel-link:hover {
+  background: rgba(0, 243, 255, 0.1);
+  box-shadow: 0 0 18px rgba(0, 243, 255, 0.25);
+}
+
+.ne-panel-source {
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.4);
+  margin-bottom: 1.25rem;
+  letter-spacing: 0.05em;
+}
+
+.ne-panel-related-title {
+  font-size: 0.7rem;
+  color: var(--dim);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  margin-bottom: 0.75rem;
+}
+
+.ne-panel-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.ne-panel-list li {
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border-left: 2px solid transparent;
+  margin-bottom: 6px;
+  font-size: 0.85rem;
+  color: #d1dcf0;
+  transition: all 0.2s ease;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.ne-panel-list li:hover {
+  background: rgba(0, 243, 255, 0.08);
+  border-left-color: var(--primary);
+  transform: translateX(4px);
+}
+
+.ne-panel-list-name {
+  color: #fff;
+  font-size: 0.85rem;
+}
+
+.ne-panel-list-sub {
+  font-size: 0.65rem;
+  color: var(--muted);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+
+.ne-panel-list-arrow {
+  color: var(--primary);
+  opacity: 0.6;
+  font-size: 1.1rem;
+  margin-left: 8px;
+}
+
+.ne-btn-back {
+  margin-top: 1.5rem;
+  padding: 0.85rem;
+  background: transparent;
+  border: 1px solid var(--primary);
+  color: var(--primary);
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: 0.72rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.ne-btn-back:hover {
+  background: rgba(0, 243, 255, 0.12);
+  box-shadow: 0 0 18px rgba(0, 243, 255, 0.25);
+}
+
+/* ---------------- Pills (shared with detail panel) ---------------- */
+
+.ne-pill {
+  display: inline-block;
+  font-size: 0.62rem;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.65);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.ne-pill-featured {
+  background: rgba(245, 158, 11, 0.15);
+  border-color: rgba(245, 158, 11, 0.4);
+  color: #fcd34d;
+}
+
+.ne-pill-gem {
+  background: rgba(234, 179, 8, 0.15);
+  border-color: rgba(234, 179, 8, 0.4);
+  color: #fde047;
+}
+
+/* ---------------- Empty state ---------------- */
 
 .ne-empty {
   position: fixed;
@@ -273,67 +498,6 @@ body {
   padding: 2px 6px;
   border-radius: 3px;
   color: var(--primary);
-}
-
-/* ---------------- Detail panel (right side, glass) ---------------- */
-
-.ne-detail {
-  position: fixed;
-  top: 50%;
-  right: 1.5rem;
-  transform: translateY(-50%);
-  z-index: 20;
-  width: 22rem;
-  padding: 1.5rem;
-  background: rgba(4, 13, 26, 0.85);
-  backdrop-filter: blur(20px);
-  border: 1px solid rgba(0, 243, 255, 0.35);
-  border-radius: 8px;
-  box-shadow:
-    0 8px 40px rgba(0, 243, 255, 0.12),
-    inset 0 0 16px rgba(0, 243, 255, 0.04);
-  color: #fff;
-}
-
-.ne-detail-close {
-  position: absolute;
-  top: 0.6rem;
-  right: 0.8rem;
-  color: rgba(255, 255, 255, 0.4);
-  background: none;
-  border: none;
-  font-size: 0.9rem;
-  cursor: pointer;
-}
-
-.ne-detail-close:hover {
-  color: #fff;
-}
-
-/* ---------------- Pills (inside detail panel) ---------------- */
-
-.ne-pill {
-  display: inline-block;
-  font-size: 0.65rem;
-  padding: 0.1rem 0.55rem;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: rgba(255, 255, 255, 0.65);
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-}
-
-.ne-pill-featured {
-  background: rgba(245, 158, 11, 0.15);
-  border-color: rgba(245, 158, 11, 0.4);
-  color: #fcd34d;
-}
-
-.ne-pill-gem {
-  background: rgba(234, 179, 8, 0.15);
-  border-color: rgba(234, 179, 8, 0.4);
-  color: #fde047;
 }
 
 /* ---------------- Keyframes ---------------- */
