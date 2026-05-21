@@ -19,6 +19,7 @@ export interface LayoutNode {
   rawColor?: string | null;
   featured?: boolean;
   gem?: boolean;
+  rarity?: "legendary" | "established" | "rare" | "gem" | null;
   parentId?: string | null;
   position: [number, number, number];
   size: number;
@@ -223,11 +224,137 @@ export default function Constellation({
         />
       </points>
 
+      {/* Rarity decorations: crowns on Legendary, sparkles on Hidden Gems */}
+      <RarityDecorations nodes={indexToNode} />
+
       {/* Hover ring on the prominent node currently under the cursor (skip during dive) */}
       {hoveredId && hoveredId !== divedNodeId ? (
         <HoverRing node={indexToNode.find((n) => n.id === hoveredId)!} />
       ) : null}
     </group>
+  );
+}
+
+// Render small "icon" sprites above Legendary nodes and golden orbiting
+// sparkles around Hidden Gems. Established and Rare get no extra decoration
+// (size + brightness in the base shader already differentiates them).
+function RarityDecorations({ nodes }: { nodes: LayoutNode[] }) {
+  const legendaries = useMemo(() => nodes.filter((n) => n.kind === "entry" && n.rarity === "legendary"), [nodes]);
+  const gems = useMemo(() => nodes.filter((n) => n.kind === "entry" && n.rarity === "gem"), [nodes]);
+
+  // Build a shared crown texture (a tiny gold crown SVG rasterized)
+  const crownTexture = useMemo(() => {
+    const c = document.createElement("canvas");
+    c.width = 64;
+    c.height = 64;
+    const ctx = c.getContext("2d")!;
+    // gold gradient crown
+    const g = ctx.createLinearGradient(0, 0, 0, 64);
+    g.addColorStop(0, "#fde68a");
+    g.addColorStop(0.5, "#fbbf24");
+    g.addColorStop(1, "#f59e0b");
+    ctx.fillStyle = g;
+    // simple stylized crown
+    ctx.beginPath();
+    ctx.moveTo(8, 50);
+    ctx.lineTo(8, 24);
+    ctx.lineTo(20, 36);
+    ctx.lineTo(32, 14);
+    ctx.lineTo(44, 36);
+    ctx.lineTo(56, 24);
+    ctx.lineTo(56, 50);
+    ctx.closePath();
+    ctx.fill();
+    // base bar
+    ctx.fillRect(8, 50, 48, 6);
+    // gems on top points
+    ctx.fillStyle = "#fff";
+    ctx.beginPath(); ctx.arc(20, 30, 2.5, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(32, 10, 3, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(44, 30, 2.5, 0, Math.PI * 2); ctx.fill();
+    const tex = new THREE.CanvasTexture(c);
+    tex.needsUpdate = true;
+    return tex;
+  }, []);
+
+  // Sparkle texture (small bright point)
+  const sparkleTexture = useMemo(() => {
+    const c = document.createElement("canvas");
+    c.width = 32;
+    c.height = 32;
+    const ctx = c.getContext("2d")!;
+    const g = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
+    g.addColorStop(0, "rgba(255, 235, 150, 1)");
+    g.addColorStop(0.4, "rgba(255, 200, 80, 0.7)");
+    g.addColorStop(1, "rgba(0, 0, 0, 0)");
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 32, 32);
+    const t = new THREE.CanvasTexture(c);
+    t.needsUpdate = true;
+    return t;
+  }, []);
+
+  // Animate sparkles orbiting their host gem nodes
+  const sparkleGroupRef = useRef<THREE.Group>(null);
+  useFrame((s) => {
+    if (!sparkleGroupRef.current) return;
+    const t = s.clock.elapsedTime;
+    // Each child group rotates at its own rate via stored userData
+    for (let i = 0; i < sparkleGroupRef.current.children.length; i++) {
+      const child = sparkleGroupRef.current.children[i];
+      child.rotation.y = t * 0.8 + i * 0.7;
+      child.rotation.x = t * 0.4 + i * 0.5;
+    }
+  });
+
+  return (
+    <>
+      {/* Crowns floating above legendary nodes */}
+      {legendaries.map((n) => (
+        <sprite
+          key={`crown-${n.id}`}
+          position={[n.position[0], n.position[1] + n.size * 1.5, n.position[2]]}
+          scale={[3.2, 3.2, 1]}
+        >
+          <spriteMaterial
+            map={crownTexture}
+            transparent
+            depthTest={false}
+            depthWrite={false}
+            blending={THREE.AdditiveBlending}
+            toneMapped={false}
+          />
+        </sprite>
+      ))}
+
+      {/* Three orbiting sparkles per hidden gem */}
+      <group ref={sparkleGroupRef}>
+        {gems.map((n) => (
+          <group key={`gem-${n.id}`} position={n.position}>
+            {[0, 1, 2].map((j) => {
+              const r = n.size * 1.5;
+              const ang = (j / 3) * Math.PI * 2;
+              return (
+                <sprite
+                  key={j}
+                  position={[Math.cos(ang) * r, Math.sin(ang) * r * 0.4, Math.sin(ang) * r]}
+                  scale={[0.9, 0.9, 1]}
+                >
+                  <spriteMaterial
+                    map={sparkleTexture}
+                    transparent
+                    depthTest={false}
+                    depthWrite={false}
+                    blending={THREE.AdditiveBlending}
+                    toneMapped={false}
+                  />
+                </sprite>
+              );
+            })}
+          </group>
+        ))}
+      </group>
+    </>
   );
 }
 

@@ -90,10 +90,28 @@ const entries = libRows.map((p) => ({
   pricing: sel(p.properties.Pricing) || "Unknown",
   featured: cb(p.properties.Featured),
   gem: cb(p.properties.Gem),
+  rarity: sel(p.properties.Rarity),
   logoUrl: url(p.properties["Logo URL"]),
   screenshotUrl: url(p.properties["Screenshot URL"]),
   source: text(p.properties.Source),
 }));
+
+// Auto-assign rarity for V1 entries that don't have one set yet, using the
+// existing featured/gem flags as approximation. New entries from the bookmark
+// import already carry an explicit Rarity.
+function rarityKey(entry) {
+  if (entry.rarity) {
+    if (entry.rarity.includes("Legendary")) return "legendary";
+    if (entry.rarity.includes("Established")) return "established";
+    if (entry.rarity.includes("Rare")) return "rare";
+    if (entry.rarity.includes("Hidden Gem")) return "gem";
+  }
+  // Heuristic fallback for un-tagged V1 entries
+  if (entry.featured && entry.gem) return "established";
+  if (entry.featured) return "legendary";
+  if (entry.gem) return "rare";
+  return "established";
+}
 console.log(`[fetch-content] Entries: ${entries.length} (${entries.filter(e => e.featured).length} featured, ${entries.filter(e => e.gem).length} gems)`);
 
 // --- Tree silhouette (from Gemini reference) ---
@@ -237,16 +255,22 @@ for (const entry of entries) {
   const parentRgb = parent ? hexToRgb(parent.color) : [1, 1, 1];
   const toolColor = mix(gradientColor(pos[1]), parentRgb, 0.5);
 
+  const tier = rarityKey(entry);
+  // Per-rarity visual scaling
+  const sizeByTier = { legendary: 5.5, established: 3.6, rare: 3.0, gem: 2.4 };
+  const boostByTier = { legendary: 1.8, established: 1.35, rare: 1.25, gem: 1.4 };
+
   nodes.push({
     id: entry.id,
     kind: "entry",
     name: entry.name,
-    color: boost(toolColor, entry.featured ? 1.6 : entry.gem ? 1.4 : 1.25),
+    color: boost(toolColor, boostByTier[tier]),
     rawColor: parent ? parent.color : "#888",
     position: pos,
-    size: entry.featured ? 4.5 : entry.gem ? 3.5 : 2.8,
+    size: sizeByTier[tier],
     featured: entry.featured,
     gem: entry.gem,
+    rarity: tier, // legendary | established | rare | gem
     parentId: entry.categoryId,
   });
   links.push({ source: entry.categoryId, target: entry.id, kind: "subcat-tool" });
@@ -323,6 +347,7 @@ const positionedNodes = nodes.map((n) => ({
   id: n.id,
   kind: n.kind,
   name: n.name,
+  rarity: n.rarity ?? null,
   color: n.color,
   rawColor: n.rawColor ?? null,
   featured: n.featured ?? false,
