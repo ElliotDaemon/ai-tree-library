@@ -13,7 +13,7 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const V1_DATA = join(__dirname, "..", "..", "v1-data");
-const LIBRARY_DS = "695ea981-738e-42bf-bec6-43ffd530d89c";
+const LIBRARY_DS = "63c6ed32-e30a-454f-9f66-dc353aeb54c6";
 
 const token = process.env.NOTION_TOKEN;
 if (!token) {

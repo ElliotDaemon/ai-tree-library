@@ -16,8 +16,8 @@ import { fileURLToPath } from "node:url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const OUTPUT = join(__dirname, "..", "public", "library.json");
 
-const LIBRARY_DS = "695ea981-738e-42bf-bec6-43ffd530d89c";
-const CATEGORIES_DS = "6e793850-a435-4b4f-8b02-9d4de4d48be5";
+const LIBRARY_DS = "63c6ed32-e30a-454f-9f66-dc353aeb54c6";
+const CATEGORIES_DS = "0f31f74d-5899-4402-a863-5725927d96cd";
 
 const token = process.env.NOTION_TOKEN;
 if (!token) {

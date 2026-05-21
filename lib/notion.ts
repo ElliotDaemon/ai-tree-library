@@ -12,8 +12,8 @@
 import { Client } from "@notionhq/client";
 
 export const NOTION_DB = {
-  LIBRARY: "695ea981-738e-42bf-bec6-43ffd530d89c", // data_source_id
-  CATEGORIES: "6e793850-a435-4b4f-8b02-9d4de4d48be5", // data_source_id
+  LIBRARY: "63c6ed32-e30a-454f-9f66-dc353aeb54c6", // database page id
+  CATEGORIES: "0f31f74d-5899-4402-a863-5725927d96cd", // database page id
 } as const;
 
 export type LibraryStatus =
