@@ -278,11 +278,10 @@ for (const entry of entries) {
 
 // Ambient decorative particles: fill the tree silhouette so it always looks
 // dense regardless of how many real entries exist. These are non-interactive.
-// We scale ambient count down slightly as real entries scale up — keeps total
-// particle count roughly stable so the tree silhouette never thins out.
-const TARGET_PARTICLES = 2500;
+// Lower count + smaller size than v1 so interactive nodes pop visually.
+const TARGET_PARTICLES = 1300;
 const realInteractive = nodes.length - 1; // minus trunk
-const AMBIENT_COUNT = Math.max(800, TARGET_PARTICLES - realInteractive);
+const AMBIENT_COUNT = Math.max(400, TARGET_PARTICLES - realInteractive);
 for (let i = 0; i < AMBIENT_COUNT; i++) {
   const y = rndY();
   const baseR = treeRadius(y);
@@ -305,14 +304,15 @@ for (let i = 0; i < AMBIENT_COUNT; i++) {
     kind: "ambient",
     color: variedColor,
     position: pos,
-    size: rndRange(0.5, 1.2),
+    size: rndRange(0.3, 0.7),
   });
 }
 
-// Plexus lines: connect nearby interactive nodes only
+// Plexus lines: connect nearby interactive nodes only.
+// We keep these very sparse — they should hint at structure, not dominate.
 const interactiveNodes = nodes.filter((n) => n.kind !== "ambient");
-const MAX_PROX_LINKS = 3;
-const PROX_THRESHOLD_SQ = 14 * 14;
+const MAX_PROX_LINKS = 2;
+const PROX_THRESHOLD_SQ = 12 * 12;
 const proxCounts = new Map();
 for (let i = 0; i < interactiveNodes.length; i++) {
   const a = interactiveNodes[i];

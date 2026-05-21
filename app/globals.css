@@ -133,16 +133,56 @@ body {
 .ne-controls-hint {
   position: fixed;
   bottom: 0;
+  left: 0;
   right: 0;
-  padding: 2rem 2.5rem;
+  padding: 1.5rem 2.5rem;
   z-index: 10;
-  text-align: right;
+  text-align: center;
   pointer-events: none;
   color: var(--dim);
-  font-size: 0.72rem;
-  letter-spacing: 0.2em;
+  font-size: 0.7rem;
+  letter-spacing: 0.18em;
   text-transform: uppercase;
   background: linear-gradient(0deg, rgba(3, 5, 8, 0.85) 0%, rgba(3, 5, 8, 0) 100%);
+}
+
+.ne-key {
+  display: inline-block;
+  padding: 1px 6px;
+  margin: 0 2px;
+  border: 1px solid rgba(0, 243, 255, 0.4);
+  border-radius: 3px;
+  color: var(--primary);
+  font-weight: 600;
+  font-size: 0.7rem;
+  letter-spacing: 0.05em;
+  background: rgba(0, 243, 255, 0.05);
+}
+
+/* ---------------- Center reticle ---------------- */
+
+.ne-reticle {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  width: 28px;
+  height: 28px;
+  transform: translate(-50%, -50%);
+  border: 1px solid rgba(0, 243, 255, 0.35);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ne-reticle-dot {
+  width: 3px;
+  height: 3px;
+  background: rgba(0, 243, 255, 0.7);
+  border-radius: 50%;
+  box-shadow: 0 0 6px rgba(0, 243, 255, 0.8);
 }
 
 /* ---------------- In-scene tooltip (rendered via <Html>) ---------------- */

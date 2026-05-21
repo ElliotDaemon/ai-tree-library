@@ -1,10 +1,10 @@
-// Tree-shaped point cloud constellation (Neural Arbor visual).
-// Particles are positioned at build time (see scripts/fetch-content.mjs)
-// and rendered via a custom ShaderMaterial for per-particle glow.
+// Tree-shaped point cloud + auto-lock targeting.
+// Each frame finds the interactive node closest to the camera; that node
+// gets the highlight ring + tooltip. Clicking anywhere opens its detail.
 
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { useFrame, useThree } from "@react-three/fiber";
 import { Html } from "@react-three/drei";
@@ -32,10 +32,9 @@ interface Props {
   nodes: LayoutNode[];
   links: LayoutLink[];
   onSelectEntry: (id: string) => void;
-  selectedId: string | null;
 }
 
-// Generates a radial glow texture (matches the reference design's gradient)
+// Radial-gradient glow texture (per-particle soft sprite)
 function makeGlowTexture(): THREE.Texture {
   const canvas = document.createElement("canvas");
   canvas.width = 128;
@@ -43,8 +42,8 @@ function makeGlowTexture(): THREE.Texture {
   const ctx = canvas.getContext("2d")!;
   const g = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
   g.addColorStop(0, "rgba(255,255,255,1)");
-  g.addColorStop(0.2, "rgba(255,255,255,0.85)");
-  g.addColorStop(0.5, "rgba(255,255,255,0.25)");
+  g.addColorStop(0.2, "rgba(255,255,255,0.9)");
+  g.addColorStop(0.5, "rgba(255,255,255,0.3)");
   g.addColorStop(1, "rgba(0,0,0,0)");
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, 128, 128);
@@ -75,15 +74,17 @@ void main() {
 }
 `;
 
-export default function Constellation({ nodes, links, onSelectEntry, selectedId }: Props) {
-  const { gl } = useThree();
+const LOCK_RADIUS = 35; // units; how close camera needs to be to start locking to a node
 
-  // --- One-time particle attribute buffers ---
-  const { positionsArr, colorsArr, sizesArr, interactiveLookup } = useMemo(() => {
+export default function Constellation({ nodes, links, onSelectEntry }: Props) {
+  const { camera, gl } = useThree();
+
+  // Particle attribute buffers
+  const { positionsArr, colorsArr, sizesArr, interactiveNodes } = useMemo(() => {
     const positions = new Float32Array(nodes.length * 3);
     const colors = new Float32Array(nodes.length * 3);
     const sizes = new Float32Array(nodes.length);
-    const lookup: Array<LayoutNode | null> = new Array(nodes.length).fill(null);
+    const interactive: LayoutNode[] = [];
     for (let i = 0; i < nodes.length; i++) {
       const n = nodes[i];
       positions[i * 3] = n.position[0];
@@ -93,15 +94,14 @@ export default function Constellation({ nodes, links, onSelectEntry, selectedId 
       colors[i * 3 + 1] = n.color[1];
       colors[i * 3 + 2] = n.color[2];
       sizes[i] = n.size;
-      // Only entries / categories / subcategories are interactive
       if (n.kind === "entry" || n.kind === "category" || n.kind === "subcategory") {
-        lookup[i] = n;
+        interactive.push(n);
       }
     }
-    return { positionsArr: positions, colorsArr: colors, sizesArr: sizes, interactiveLookup: lookup };
+    return { positionsArr: positions, colorsArr: colors, sizesArr: sizes, interactiveNodes: interactive };
   }, [nodes]);
 
-  // --- Plexus line buffer (vertex colors blend between endpoints) ---
+  // Plexus line buffer
   const { linePositions, lineColors } = useMemo(() => {
     const nodeById = new Map(nodes.map((n) => [n.id, n]));
     const pos: number[] = [];
@@ -121,61 +121,66 @@ export default function Constellation({ nodes, links, onSelectEntry, selectedId 
     []
   );
 
-  const treeGroupRef = useRef<THREE.Group>(null);
-  const pointsRef = useRef<THREE.Points>(null);
-  const raycaster = useMemo(() => {
-    const r = new THREE.Raycaster();
-    // Generous threshold — tree particles are sparse in screen-space; this
-    // makes nodes easier to click without making ambient particles steal hits
-    // (we filter by kind in the picker).
-    r.params.Points = { threshold: 4.0 };
-    return r;
-  }, []);
+  const [lockedId, setLockedId] = useState<string | null>(null);
+  const lockedRef = useRef<string | null>(null);
+  lockedRef.current = lockedId;
 
-  const { camera, pointer } = useThree();
-  const [hoveredId, setHoveredId] = useState<string | null>(null);
+  // Per-frame: find nearest interactive node to camera (within LOCK_RADIUS).
+  // We weight slightly toward what's in front of the camera so flying past
+  // a node feels intuitive — the next-forward one takes over earlier than
+  // strict Euclidean distance would suggest.
+  useFrame(() => {
+    const cp = camera.position;
+    const forward = new THREE.Vector3();
+    camera.getWorldDirection(forward);
 
-  // Subtle floating animation for the whole tree (matches reference)
-  useFrame((state) => {
-    const t = state.clock.elapsedTime;
-    if (treeGroupRef.current) {
-      treeGroupRef.current.position.y = Math.sin(t * 0.5) * 1.6;
-    }
-    // Per-frame raycast to find hovered interactive particle.
-    // We scan ALL hits (not just the first) so ambient particles in the
-    // foreground don't block clicks on interactive nodes behind them.
-    if (pointsRef.current) {
-      raycaster.setFromCamera(pointer, camera);
-      const hits = raycaster.intersectObject(pointsRef.current);
-      let foundId: string | null = null;
-      let bestDistance = Infinity;
-      for (const hit of hits) {
-        const idx = hit.index ?? -1;
-        const candidate = interactiveLookup[idx];
-        if (!candidate) continue;
-        // Prefer the closest interactive hit (by distance to camera ray)
-        const d = hit.distanceToRay ?? hit.distance;
-        if (d < bestDistance) {
-          bestDistance = d;
-          foundId = candidate.id;
-        }
+    let best: LayoutNode | null = null;
+    let bestScore = Infinity;
+    for (const n of interactiveNodes) {
+      const dx = n.position[0] - cp.x;
+      const dy = n.position[1] - cp.y;
+      const dz = n.position[2] - cp.z;
+      const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      if (dist > LOCK_RADIUS) continue;
+      // Forward dot product: positive = in front of camera
+      const forwardDot = (dx * forward.x + dy * forward.y + dz * forward.z) / Math.max(dist, 0.001);
+      // Score: distance penalized by how far behind it is
+      const behindPenalty = forwardDot < 0 ? 8 : 0;
+      const score = dist + behindPenalty;
+      if (score < bestScore) {
+        bestScore = score;
+        best = n;
       }
-      if (foundId !== hoveredId) setHoveredId(foundId);
     }
+    const newId = best?.id ?? null;
+    if (newId !== lockedRef.current) setLockedId(newId);
   });
 
-  const hoveredNode = hoveredId ? nodes.find((n) => n.id === hoveredId) : null;
-  const selectedNode = selectedId ? nodes.find((n) => n.id === selectedId) : null;
+  // Click anywhere → if locked on an entry, open it
+  useEffect(() => {
+    const el = gl.domElement;
+    const handler = () => {
+      const id = lockedRef.current;
+      if (!id) return;
+      const n = interactiveNodes.find((x) => x.id === id);
+      if (n && n.kind === "entry") onSelectEntry(n.id);
+    };
+    // Use click rather than pointerdown so it doesn't fire during drag-to-look
+    el.addEventListener("click", handler);
+    return () => el.removeEventListener("click", handler);
+  }, [gl, interactiveNodes, onSelectEntry]);
 
-  // Side effect: cursor pointer on hover of clickable nodes
-  useMemo(() => {
+  const lockedNode = lockedId ? interactiveNodes.find((n) => n.id === lockedId) ?? null : null;
+
+  // Cursor feedback
+  useEffect(() => {
     if (typeof document === "undefined") return;
-    document.body.style.cursor = hoveredId ? "pointer" : "default";
-  }, [hoveredId]);
+    document.body.style.cursor = lockedNode?.kind === "entry" ? "pointer" : "default";
+  }, [lockedNode]);
 
   return (
-    <group ref={treeGroupRef}>
-      {/* Plexus lines */}
+    <group>
+      {/* Plexus lines (very faint, just adds depth) */}
       {linePositions.length > 0 ? (
         <lineSegments>
           <bufferGeometry>
@@ -185,29 +190,15 @@ export default function Constellation({ nodes, links, onSelectEntry, selectedId 
           <lineBasicMaterial
             vertexColors
             transparent
-            opacity={0.22}
+            opacity={0.08}
             blending={THREE.AdditiveBlending}
             depthWrite={false}
           />
         </lineSegments>
       ) : null}
 
-      {/* The particle cloud */}
-      <points
-        ref={pointsRef}
-        onPointerDown={(e) => {
-          e.stopPropagation();
-          // Use the currently hovered interactive node (from the per-frame
-          // raycast) rather than e.index — e.index can land on a nearby
-          // ambient particle inside the generous threshold.
-          if (hoveredId) {
-            const n = nodes.find((x) => x.id === hoveredId);
-            if (n && n.kind === "entry") {
-              onSelectEntry(n.id);
-            }
-          }
-        }}
-      >
+      {/* Particle cloud */}
+      <points>
         <bufferGeometry>
           <bufferAttribute attach="attributes-position" args={[positionsArr, 3]} />
           <bufferAttribute attach="attributes-color" args={[colorsArr, 3]} />
@@ -227,50 +218,58 @@ export default function Constellation({ nodes, links, onSelectEntry, selectedId 
         />
       </points>
 
-      {/* Hover tooltip — only for interactive nodes with a name */}
-      {hoveredNode && hoveredNode.name ? (
+      {/* Locked tooltip */}
+      {lockedNode && lockedNode.name ? (
         <Html
-          position={hoveredNode.position}
+          position={lockedNode.position}
           center
           distanceFactor={140}
           style={{ pointerEvents: "none" }}
         >
           <div className="ne-tooltip">
-            <div className="ne-tooltip-name">{hoveredNode.name}</div>
+            <div className="ne-tooltip-name">{lockedNode.name}</div>
             <div className="ne-tooltip-status">
-              {hoveredNode.kind === "entry"
-                ? hoveredNode.featured
-                  ? "FEATURED NODE"
-                  : hoveredNode.gem
-                  ? "HIDDEN GEM"
-                  : "ACTIVE DATA NODE"
-                : hoveredNode.kind === "category"
-                ? "CATEGORY BRANCH"
+              {lockedNode.kind === "entry"
+                ? lockedNode.featured
+                  ? "FEATURED · CLICK TO OPEN"
+                  : lockedNode.gem
+                  ? "HIDDEN GEM · CLICK TO OPEN"
+                  : "CLICK TO OPEN"
+                : lockedNode.kind === "category"
+                ? "CATEGORY"
                 : "SUBCATEGORY"}
             </div>
           </div>
         </Html>
       ) : null}
 
-      {/* Selection ring */}
-      {selectedNode ? (
-        <mesh position={selectedNode.position}>
-          <ringGeometry args={[selectedNode.size * 1.3, selectedNode.size * 1.55, 32]} />
-          <meshBasicMaterial
-            color={
-              new THREE.Color(
-                selectedNode.color[0],
-                selectedNode.color[1],
-                selectedNode.color[2]
-              )
-            }
-            transparent
-            opacity={0.8}
-            side={THREE.DoubleSide}
-            toneMapped={false}
-          />
-        </mesh>
+      {/* Selection ring on locked node */}
+      {lockedNode ? (
+        <SelectionRing node={lockedNode} />
       ) : null}
     </group>
+  );
+}
+
+function SelectionRing({ node }: { node: LayoutNode }) {
+  const ringRef = useRef<THREE.Mesh>(null);
+  // Pulse the ring scale subtly
+  useFrame((state) => {
+    if (ringRef.current) {
+      const s = 1 + Math.sin(state.clock.elapsedTime * 3) * 0.08;
+      ringRef.current.scale.setScalar(s);
+    }
+  });
+  return (
+    <mesh ref={ringRef} position={node.position}>
+      <ringGeometry args={[node.size * 1.4, node.size * 1.65, 32]} />
+      <meshBasicMaterial
+        color={new THREE.Color(node.color[0], node.color[1], node.color[2])}
+        transparent
+        opacity={0.85}
+        side={THREE.DoubleSide}
+        toneMapped={false}
+      />
+    </mesh>
   );
 }

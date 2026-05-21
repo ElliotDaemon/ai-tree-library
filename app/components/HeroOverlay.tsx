@@ -1,6 +1,5 @@
-// Floating overlay over the constellation: header (top-left), stats (top-right),
-// controls hint (bottom). Matches the Neural Arbor aesthetic — thin uppercase,
-// pulsing cyan dot, faint vignette gradients.
+// Floating overlay over the constellation: header, stats, center reticle,
+// controls hint.
 
 "use client";
 
@@ -47,9 +46,24 @@ export default function HeroOverlay({ stats }: Props) {
         <div className="ne-stats ne-stats-warn">library.json not generated yet</div>
       )}
 
+      {/* Center reticle */}
+      <div className="ne-reticle" aria-hidden>
+        <div className="ne-reticle-dot" />
+      </div>
+
       {/* Bottom hint */}
       <div className="ne-controls-hint">
-        DRAG TO ROTATE &nbsp;|&nbsp; SCROLL TO ZOOM &nbsp;|&nbsp; HOVER TO INSPECT &nbsp;|&nbsp; CLICK TO OPEN
+        <span className="ne-key">W</span><span className="ne-key">A</span><span className="ne-key">S</span><span className="ne-key">D</span> MOVE
+        &nbsp;·&nbsp;
+        <span className="ne-key">R</span><span className="ne-key">F</span> UP/DOWN
+        &nbsp;·&nbsp;
+        DRAG TO LOOK
+        &nbsp;·&nbsp;
+        SCROLL/PINCH TO BOOST
+        &nbsp;·&nbsp;
+        AUTO-LOCKS TO NEAREST
+        &nbsp;·&nbsp;
+        CLICK TO OPEN
       </div>
 
       {/* Empty-state center card */}
