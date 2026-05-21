@@ -218,13 +218,13 @@ export default function Constellation({ nodes, links, onSelectEntry }: Props) {
         />
       </points>
 
-      {/* Locked tooltip */}
+      {/* Locked tooltip — fixed pixel size regardless of camera distance.
+          (No distanceFactor: HTML scales would otherwise blow up when flying close.) */}
       {lockedNode && lockedNode.name ? (
         <Html
           position={lockedNode.position}
-          center
-          distanceFactor={140}
-          style={{ pointerEvents: "none" }}
+          style={{ pointerEvents: "none", transform: "translate(15px, -50%)" }}
+          zIndexRange={[10, 0]}
         >
           <div className="ne-tooltip">
             <div className="ne-tooltip-name">{lockedNode.name}</div>

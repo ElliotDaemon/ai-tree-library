@@ -191,34 +191,37 @@ body {
   background: rgba(4, 13, 26, 0.88);
   border: 1px solid rgba(0, 243, 255, 0.55);
   border-radius: 4px;
-  padding: 0.7rem 1.1rem;
+  padding: 0.4rem 0.7rem;
   color: #fff;
-  font-size: 0.85rem;
+  font-size: 11px;
+  line-height: 1.3;
   white-space: nowrap;
+  max-width: 280px;
   box-shadow:
-    0 4px 24px rgba(0, 243, 255, 0.18),
-    inset 0 0 12px rgba(0, 243, 255, 0.08);
+    0 4px 18px rgba(0, 243, 255, 0.18),
+    inset 0 0 10px rgba(0, 243, 255, 0.08);
   backdrop-filter: blur(8px);
-  transform: translate(15px, -50%);
   pointer-events: none;
 }
 
 .ne-tooltip-name {
   font-weight: 600;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   color: var(--primary);
-  font-size: 1.05rem;
+  font-size: 12px;
   text-transform: uppercase;
-  margin-bottom: 0.25rem;
+  margin-bottom: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .ne-tooltip-status {
-  font-size: 0.7rem;
+  font-size: 9px;
   color: #a4b5d0;
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  letter-spacing: 0.12em;
+  gap: 4px;
+  letter-spacing: 0.1em;
 }
 
 .ne-tooltip-status::before {
