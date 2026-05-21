@@ -125,7 +125,10 @@ export default function Constellation({ nodes, links, onSelectEntry, selectedId 
   const pointsRef = useRef<THREE.Points>(null);
   const raycaster = useMemo(() => {
     const r = new THREE.Raycaster();
-    r.params.Points = { threshold: 1.4 };
+    // Generous threshold — tree particles are sparse in screen-space; this
+    // makes nodes easier to click without making ambient particles steal hits
+    // (we filter by kind in the picker).
+    r.params.Points = { threshold: 4.0 };
     return r;
   }, []);
 
@@ -138,17 +141,23 @@ export default function Constellation({ nodes, links, onSelectEntry, selectedId 
     if (treeGroupRef.current) {
       treeGroupRef.current.position.y = Math.sin(t * 0.5) * 1.6;
     }
-    // Per-frame raycast to find hovered interactive particle
+    // Per-frame raycast to find hovered interactive particle.
+    // We scan ALL hits (not just the first) so ambient particles in the
+    // foreground don't block clicks on interactive nodes behind them.
     if (pointsRef.current) {
       raycaster.setFromCamera(pointer, camera);
       const hits = raycaster.intersectObject(pointsRef.current);
       let foundId: string | null = null;
+      let bestDistance = Infinity;
       for (const hit of hits) {
         const idx = hit.index ?? -1;
         const candidate = interactiveLookup[idx];
-        if (candidate) {
+        if (!candidate) continue;
+        // Prefer the closest interactive hit (by distance to camera ray)
+        const d = hit.distanceToRay ?? hit.distance;
+        if (d < bestDistance) {
+          bestDistance = d;
           foundId = candidate.id;
-          break;
         }
       }
       if (foundId !== hoveredId) setHoveredId(foundId);
@@ -188,10 +197,14 @@ export default function Constellation({ nodes, links, onSelectEntry, selectedId 
         ref={pointsRef}
         onPointerDown={(e) => {
           e.stopPropagation();
-          const idx = e.index ?? -1;
-          const n = interactiveLookup[idx];
-          if (n && n.kind === "entry") {
-            onSelectEntry(n.id);
+          // Use the currently hovered interactive node (from the per-frame
+          // raycast) rather than e.index — e.index can land on a nearby
+          // ambient particle inside the generous threshold.
+          if (hoveredId) {
+            const n = nodes.find((x) => x.id === hoveredId);
+            if (n && n.kind === "entry") {
+              onSelectEntry(n.id);
+            }
           }
         }}
       >

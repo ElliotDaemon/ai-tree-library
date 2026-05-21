@@ -4,6 +4,14 @@
 // Fetches all Status=Ready rows from Notion Library + entire Categories DB,
 // builds a tree-shaped particle layout (matching the Neural Arbor design),
 // and writes /public/library.json.
+//
+// Layout philosophy:
+//   - 18 categories each own an ANGULAR WEDGE around the trunk.
+//   - Within each wedge, tools + subcategories distribute across the
+//     FULL tree height (roots → canopy) — not just the canopy.
+//   - The tree silhouette is enforced by treeRadius(y).
+//   - Ambient particles fill the silhouette uniformly to maintain density
+//     at any number of entries.
 
 import { Client } from "@notionhq/client";
 import { writeFile, mkdir } from "node:fs/promises";
@@ -92,13 +100,8 @@ const entries = libRows.map((p) => ({
 }));
 console.log(`[fetch-content] Entries: ${entries.length} (${entries.filter(e => e.featured).length} featured, ${entries.filter(e => e.gem).length} gems)`);
 
-// --- Tree-shaped layout (Neural Arbor) ---
-// Y axis is vertical. The tree silhouette matches the reference design:
-//   y < -45 → roots flaring
-//   -45 ≤ y < 10 → trunk
-//   10 ≤ y < 50 → branches expanding into canopy
-//   50 ≤ y → canopy rounding off
-// Returns radius bound at a given height.
+// --- Tree silhouette ---
+// Returns the maximum radius at a given height y.
 function treeRadius(y) {
   if (y < -45) return 8 + Math.pow(-45 - y, 1.4) * 1.2;
   if (y < 10) return Math.max(2, 6 - (y + 45) * 0.05);
@@ -115,13 +118,17 @@ function rnd() {
   return seedState / 0x100000000;
 }
 function rndRange(a, b) { return a + (b - a) * rnd(); }
+function rndY() {
+  // Bias slightly toward the canopy (where the volume is larger anyway)
+  const u = Math.pow(rnd(), 0.85);
+  return -55 + u * 120; // covers -55..65, biased toward upper range
+}
 
 // Height gradient color: purple (roots) → cyan (trunk) → pink (canopy).
 const COLOR_ROOT = [0x70 / 255, 0, 1.0];        // #7000ff
 const COLOR_TRUNK = [0, 0xf3 / 255, 1.0];        // #00f3ff
 const COLOR_CANOPY = [1.0, 0, 0xaa / 255];       // #ff00aa
 function gradientColor(y) {
-  // y range roughly -60 .. 70
   if (y < 10) {
     const t = (y + 60) / 70;
     return mix(COLOR_ROOT, COLOR_TRUNK, t);
@@ -137,16 +144,29 @@ function hexToRgb(hex) {
   const h = hex.replace("#", "");
   return [parseInt(h.slice(0, 2), 16) / 255, parseInt(h.slice(2, 4), 16) / 255, parseInt(h.slice(4, 6), 16) / 255];
 }
+function blendWithGradient(categoryRgb, y, weight) {
+  const g = gradientColor(y);
+  return mix(g, categoryRgb, weight);
+}
+
+// Sample a position inside the tree silhouette at a given height + angular wedge.
+function samplePosition(y, baseAngle, angularWidth, density = 0.5) {
+  const maxR = treeRadius(y);
+  // Density-biased radius (closer to center = denser)
+  const r = maxR * Math.pow(rnd(), density);
+  const theta = baseAngle + (rnd() - 0.5) * angularWidth;
+  return [
+    r * Math.cos(theta) + rndRange(-1.5, 1.5),
+    y + rndRange(-1.5, 1.5),
+    r * Math.sin(theta) + rndRange(-1.5, 1.5),
+  ];
+}
 
 // --- Build nodes ---
-// Three kinds of interactive nodes: category, subcategory, entry.
-// Plus a swarm of ambient decorative particles to fill out the tree silhouette.
 
 const topLevel = categories.filter((c) => c.isTopLevel).sort((a, b) => a.displayOrder - b.displayOrder);
-const subById = new Map();
 const subsByParent = new Map();
 for (const sub of categories.filter((c) => !c.isTopLevel)) {
-  subById.set(sub.id, sub);
   if (!subsByParent.has(sub.parentName)) subsByParent.set(sub.parentName, []);
   subsByParent.get(sub.parentName).push(sub);
 }
@@ -154,96 +174,101 @@ for (const sub of categories.filter((c) => !c.isTopLevel)) {
 const nodes = [];
 const links = [];
 
-// Trunk anchor (invisible logical root)
+// Trunk anchor (logical root, kept invisible-ish at the base)
 const TRUNK_ID = "__trunk__";
 nodes.push({
   id: TRUNK_ID,
   kind: "trunk",
   name: "AI Tree Library",
   color: [1, 1, 1],
-  position: [0, -40, 0],
-  size: 4,
+  position: [0, -45, 0],
+  size: 5,
 });
 
-// Categories: one branch per top-level category, distributed in angle around the trunk.
-// We give each branch a base angle θ and place the category anchor at mid-branch height.
-const branchAngles = new Map();
+// Each top-level category claims a wedge of angles around the trunk.
+const N_CATS = Math.max(topLevel.length, 1);
+const WEDGE_FULL = (Math.PI * 2) / N_CATS;
+const WEDGE_USABLE = WEDGE_FULL * 0.85; // small gap between wedges
+
+const wedgeByCategory = new Map();
+const categoryAnchorPos = new Map();
+
 topLevel.forEach((cat, i) => {
-  const theta = (i / topLevel.length) * Math.PI * 2;
-  branchAngles.set(cat.id, theta);
-  const y = 20; // mid-branch, in canopy region
-  const r = treeRadius(y) * 0.55;
-  const catColor = blendWithGradient(hexToRgb(cat.color), y, 0.55);
+  const baseAngle = (i / N_CATS) * Math.PI * 2;
+  wedgeByCategory.set(cat.id, { baseAngle, width: WEDGE_USABLE });
+
+  // Place the category ANCHOR up in its branch's canopy at mid-height of upper tree.
+  const anchorY = 30 + rndRange(-5, 8);
+  const anchorPos = samplePosition(anchorY, baseAngle, WEDGE_USABLE * 0.3, 0.3);
+  categoryAnchorPos.set(cat.id, anchorPos);
+  const catColor = blendWithGradient(hexToRgb(cat.color), anchorY, 0.6);
   nodes.push({
     id: cat.id,
     kind: "category",
     name: cat.name,
     color: catColor,
     rawColor: cat.color,
-    position: [r * Math.cos(theta), y, r * Math.sin(theta)],
-    size: 4.5,
-    angle: theta,
+    position: anchorPos,
+    size: 6.0,
+    angle: baseAngle,
   });
   links.push({ source: TRUNK_ID, target: cat.id, kind: "trunk-cat" });
 });
 
-// Subcategories: cluster around their parent category, with small angular + vertical spread.
+// Subcategories: scatter through their parent's wedge across multiple heights
 const subPositions = new Map();
 for (const parent of topLevel) {
   const subs = (subsByParent.get(parent.name) || []).sort((a, b) => a.displayOrder - b.displayOrder);
-  const parentAngle = branchAngles.get(parent.id);
+  const { baseAngle, width } = wedgeByCategory.get(parent.id);
   subs.forEach((sub, j) => {
-    // Spread along the branch arc; vary height within the canopy.
-    const arcSpread = subs.length === 1 ? 0 : ((j / (subs.length - 1)) - 0.5) * 0.45;
-    const theta = parentAngle + arcSpread;
-    const y = 25 + (j - subs.length / 2) * 4 + rndRange(-2, 2);
-    const r = treeRadius(y) * rndRange(0.55, 0.8);
-    const subColor = blendWithGradient(hexToRgb(parent.color), y, 0.6);
-    const pos = [r * Math.cos(theta), y, r * Math.sin(theta)];
-    subPositions.set(sub.id, { pos, angle: theta, parentId: parent.id });
+    // Distribute subcategory heights across a wide range — some are lower-branch, some higher
+    const y = 5 + (j / Math.max(subs.length, 1)) * 35 + rndRange(-6, 6);
+    const pos = samplePosition(y, baseAngle, width * 0.7, 0.4);
+    subPositions.set(sub.id, { pos, baseAngle, parentId: parent.id });
+    const parentRgb = hexToRgb(parent.color);
     nodes.push({
       id: sub.id,
       kind: "subcategory",
       name: sub.name,
-      color: subColor,
+      color: blendWithGradient(parentRgb, y, 0.55),
       rawColor: parent.color,
       position: pos,
-      size: 2.5,
+      size: 3.5,
       parentId: parent.id,
     });
     links.push({ source: parent.id, target: sub.id, kind: "cat-subcat" });
   });
 }
 
-// Entries: leaves clustered in the canopy near their subcategory anchor.
-const entriesPositioned = [];
+// Entries (tools): each one positioned anywhere in its category's wedge,
+// across the FULL tree height (roots → canopy). This is what makes the
+// arrangement read as a tree.
 for (const entry of entries) {
   if (!entry.categoryId) continue;
   const subInfo = subPositions.get(entry.categoryId);
   if (!subInfo) continue;
-  const { angle: subAngle } = subInfo;
-  // Push leaves outward from the subcategory, mostly toward the upper canopy.
-  const y = subInfo.pos[1] + rndRange(0, 30);
-  const r = treeRadius(y) * rndRange(0.65, 0.95);
-  const thetaJitter = rndRange(-0.25, 0.25);
-  const theta = subAngle + thetaJitter;
-  const pos = [
-    r * Math.cos(theta) + rndRange(-2, 2),
-    Math.max(-55, Math.min(65, y + rndRange(-2, 2))),
-    r * Math.sin(theta) + rndRange(-2, 2),
-  ];
+  const wedge = wedgeByCategory.get(subInfo.parentId);
+  if (!wedge) continue;
+  const { baseAngle, width } = wedge;
+
+  // Distribute across the full vertical range, with mild bias toward the canopy.
+  const y = rndY();
+  const pos = samplePosition(y, baseAngle, width, 0.5);
+
   const parent = topLevel.find((c) => c.id === subInfo.parentId);
-  const baseColor = parent ? hexToRgb(parent.color) : [1, 1, 1];
-  const color = blendWithGradient(baseColor, pos[1], 0.5);
-  entriesPositioned.push({ entry, position: pos });
+  const parentRgb = parent ? hexToRgb(parent.color) : [1, 1, 1];
+
+  // Featured/gem get larger sizes for easier targeting + visual prominence
+  const size = entry.featured ? 4.5 : entry.gem ? 3.5 : 2.8;
+
   nodes.push({
     id: entry.id,
     kind: "entry",
     name: entry.name,
-    color,
+    color: blendWithGradient(parentRgb, pos[1], 0.5),
     rawColor: parent ? parent.color : "#888",
     position: pos,
-    size: entry.featured ? 2.4 : entry.gem ? 1.8 : 1.3,
+    size,
     featured: entry.featured,
     gem: entry.gem,
     parentId: entry.categoryId,
@@ -251,13 +276,16 @@ for (const entry of entries) {
   links.push({ source: entry.categoryId, target: entry.id, kind: "subcat-tool" });
 }
 
-// Ambient decorative particles: fill the tree silhouette so it looks dense.
-// These aren't interactive — they're just for the visual mass.
-const AMBIENT_COUNT = 1500;
+// Ambient decorative particles: fill the tree silhouette so it always looks
+// dense regardless of how many real entries exist. These are non-interactive.
+// We scale ambient count down slightly as real entries scale up — keeps total
+// particle count roughly stable so the tree silhouette never thins out.
+const TARGET_PARTICLES = 2500;
+const realInteractive = nodes.length - 1; // minus trunk
+const AMBIENT_COUNT = Math.max(800, TARGET_PARTICLES - realInteractive);
 for (let i = 0; i < AMBIENT_COUNT; i++) {
-  const y = rndRange(-60, 70);
+  const y = rndY();
   const baseR = treeRadius(y);
-  // Bias density toward the volume center (matches the reference shader).
   const r = baseR * Math.pow(rnd(), 0.5);
   const theta = rnd() * Math.PI * 2;
   const pos = [
@@ -265,28 +293,26 @@ for (let i = 0; i < AMBIENT_COUNT; i++) {
     y + rndRange(-3, 3),
     r * Math.sin(theta) + rndRange(-3, 3),
   ];
-  const color = gradientColor(pos[1]);
-  // Tiny hue jitter for organic variation
-  const hueShift = rndRange(-0.05, 0.05);
+  const c = gradientColor(pos[1]);
+  const hueShift = rndRange(-0.04, 0.04);
   const variedColor = [
-    Math.max(0, Math.min(1, color[0] + hueShift * 0.3)),
-    Math.max(0, Math.min(1, color[1] + hueShift * 0.1)),
-    Math.max(0, Math.min(1, color[2] + hueShift * 0.4)),
+    Math.max(0, Math.min(1, c[0] + hueShift * 0.3)),
+    Math.max(0, Math.min(1, c[1] + hueShift * 0.1)),
+    Math.max(0, Math.min(1, c[2] + hueShift * 0.4)),
   ];
   nodes.push({
     id: `__ambient_${i}__`,
     kind: "ambient",
     color: variedColor,
     position: pos,
-    size: rndRange(0.6, 1.4),
+    size: rndRange(0.5, 1.2),
   });
 }
 
-// Plexus links: connect each non-ambient node to a few of its nearest neighbors
-// (proximity-based, capped per node). Adds organic-looking inter-cluster threads.
+// Plexus lines: connect nearby interactive nodes only
 const interactiveNodes = nodes.filter((n) => n.kind !== "ambient");
 const MAX_PROX_LINKS = 3;
-const PROX_THRESHOLD_SQ = 12 * 12;
+const PROX_THRESHOLD_SQ = 14 * 14;
 const proxCounts = new Map();
 for (let i = 0; i < interactiveNodes.length; i++) {
   const a = interactiveNodes[i];
@@ -299,7 +325,6 @@ for (let i = 0; i < interactiveNodes.length; i++) {
     const dz = a.position[2] - b.position[2];
     const d2 = dx * dx + dy * dy + dz * dz;
     if (d2 > PROX_THRESHOLD_SQ) continue;
-    // Skip if they're already connected structurally
     const already = links.some(
       (l) =>
         (l.source === a.id && l.target === b.id) ||
@@ -314,11 +339,6 @@ for (let i = 0; i < interactiveNodes.length; i++) {
 
 console.log(`[fetch-content] Nodes: ${nodes.length} (${interactiveNodes.length} interactive + ${nodes.length - interactiveNodes.length} ambient)`);
 console.log(`[fetch-content] Links: ${links.length}`);
-
-function blendWithGradient(categoryRgb, y, weight) {
-  const g = gradientColor(y);
-  return mix(g, categoryRgb, weight);
-}
 
 function emptyPayload() {
   return { generatedAt: new Date().toISOString(), stats: { categories: 0, topLevel: 0, entries: 0, featured: 0, gems: 0 }, categories: [], entries: [], layout: { nodes: [], links: [] } };
