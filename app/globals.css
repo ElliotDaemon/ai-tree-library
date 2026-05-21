@@ -1,0 +1,57 @@
+@import "tailwindcss";
+
+:root {
+  --background: #050510;
+  --foreground: #e2e8f0;
+  --glow-violet: #8b5cf6;
+  --glow-blue: #3b82f6;
+  --glow-pink: #ec4899;
+  --glow-amber: #f59e0b;
+  --glow-emerald: #10b981;
+  --glow-indigo: #6366f1;
+  --glow-teal: #14b8a6;
+  --glow-orange: #f97316;
+  --glow-red: #ef4444;
+  --glow-cyan: #06b6d4;
+  --glow-purple: #a855f7;
+  --glow-green: #22c55e;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+html, body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), system-ui, sans-serif;
+  overflow: hidden;
+  height: 100%;
+}
+
+body {
+  /* Subtle blue/purple nebula gradient on top of near-black */
+  background:
+    radial-gradient(ellipse at 30% 20%, rgba(99, 102, 241, 0.08), transparent 50%),
+    radial-gradient(ellipse at 70% 80%, rgba(139, 92, 246, 0.06), transparent 50%),
+    radial-gradient(ellipse at 50% 50%, rgba(20, 184, 166, 0.03), transparent 70%),
+    var(--background);
+}
+
+/* Hide scrollbars inside the scene container */
+.scene-container {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+}
+
+/* Floating overlay panels */
+.glass-panel {
+  background: rgba(10, 10, 20, 0.6);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+}
