@@ -1,57 +1,302 @@
 @import "tailwindcss";
 
 :root {
-  --background: #050510;
-  --foreground: #e2e8f0;
-  --glow-violet: #8b5cf6;
-  --glow-blue: #3b82f6;
-  --glow-pink: #ec4899;
-  --glow-amber: #f59e0b;
-  --glow-emerald: #10b981;
-  --glow-indigo: #6366f1;
-  --glow-teal: #14b8a6;
-  --glow-orange: #f97316;
-  --glow-red: #ef4444;
-  --glow-cyan: #06b6d4;
-  --glow-purple: #a855f7;
-  --glow-green: #22c55e;
+  --bg: #030508;
+  --primary: #00f3ff;
+  --secondary: #7000ff;
+  --accent: #ff00aa;
+  --fg: #e2e8f0;
+  --muted: #8b9bb4;
+  --dim: #566b8e;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-background: var(--bg);
+  --color-foreground: var(--fg);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
 html, body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-sans), system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans), "Segoe UI", system-ui, sans-serif;
   overflow: hidden;
   height: 100%;
+  user-select: none;
 }
 
 body {
-  /* Subtle blue/purple nebula gradient on top of near-black */
+  /* Subtle nebula on top of the near-black */
   background:
-    radial-gradient(ellipse at 30% 20%, rgba(99, 102, 241, 0.08), transparent 50%),
-    radial-gradient(ellipse at 70% 80%, rgba(139, 92, 246, 0.06), transparent 50%),
-    radial-gradient(ellipse at 50% 50%, rgba(20, 184, 166, 0.03), transparent 70%),
-    var(--background);
+    radial-gradient(ellipse at 25% 15%, rgba(112, 0, 255, 0.10), transparent 55%),
+    radial-gradient(ellipse at 75% 85%, rgba(0, 243, 255, 0.06), transparent 50%),
+    radial-gradient(ellipse at 50% 50%, rgba(255, 0, 170, 0.03), transparent 70%),
+    var(--bg);
 }
 
-/* Hide scrollbars inside the scene container */
 .scene-container {
   position: fixed;
   inset: 0;
   overflow: hidden;
 }
 
-/* Floating overlay panels */
-.glass-panel {
+/* ---------------- Hero overlay ---------------- */
+
+.ne-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  padding: 2.5rem;
+  z-index: 10;
+  background: linear-gradient(180deg, rgba(3, 5, 8, 0.85) 0%, rgba(3, 5, 8, 0) 100%);
+  pointer-events: none;
+  max-width: 36rem;
+}
+
+.ne-title {
+  font-size: 2rem;
+  margin: 0;
+  font-weight: 200;
+  color: #fff;
+  letter-spacing: 0.4em;
+  text-transform: uppercase;
+  text-shadow: 0 0 24px rgba(0, 243, 255, 0.45);
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.ne-dot {
+  display: inline-block;
+  width: 0.7rem;
+  height: 0.7rem;
+  background: var(--primary);
+  border-radius: 50%;
+  box-shadow: 0 0 16px var(--primary);
+  animation: ne-pulse 2s infinite;
+  flex-shrink: 0;
+}
+
+.ne-subtitle {
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin: 0.6rem 0 0 1.55rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  font-weight: 400;
+}
+
+/* ---------------- Stats (top-right) ---------------- */
+
+.ne-stats {
+  position: fixed;
+  top: 0;
+  right: 0;
+  padding: 2.5rem;
+  z-index: 10;
+  text-align: right;
+  pointer-events: none;
+  font-size: 0.78rem;
+  letter-spacing: 0.18em;
+  color: var(--muted);
+  text-transform: uppercase;
+  background: linear-gradient(180deg, rgba(3, 5, 8, 0.85) 0%, rgba(3, 5, 8, 0) 100%);
+}
+
+.ne-stat-line {
+  margin-bottom: 0.3rem;
+}
+
+.ne-stat-value {
+  color: var(--primary);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 0 6px rgba(0, 243, 255, 0.35);
+}
+
+.ne-stat-label {
+  color: var(--muted);
+}
+
+.ne-stat-sep {
+  margin: 0 0.4rem;
+  color: var(--dim);
+}
+
+.ne-stats-warn {
+  color: #fbbf24;
+}
+
+/* ---------------- Controls hint (bottom) ---------------- */
+
+.ne-controls-hint {
+  position: fixed;
+  bottom: 0;
+  right: 0;
+  padding: 2rem 2.5rem;
+  z-index: 10;
+  text-align: right;
+  pointer-events: none;
+  color: var(--dim);
+  font-size: 0.72rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  background: linear-gradient(0deg, rgba(3, 5, 8, 0.85) 0%, rgba(3, 5, 8, 0) 100%);
+}
+
+/* ---------------- In-scene tooltip (rendered via <Html>) ---------------- */
+
+.ne-tooltip {
+  background: rgba(4, 13, 26, 0.88);
+  border: 1px solid rgba(0, 243, 255, 0.55);
+  border-radius: 4px;
+  padding: 0.7rem 1.1rem;
+  color: #fff;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  box-shadow:
+    0 4px 24px rgba(0, 243, 255, 0.18),
+    inset 0 0 12px rgba(0, 243, 255, 0.08);
+  backdrop-filter: blur(8px);
+  transform: translate(15px, -50%);
+  pointer-events: none;
+}
+
+.ne-tooltip-name {
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--primary);
+  font-size: 1.05rem;
+  text-transform: uppercase;
+  margin-bottom: 0.25rem;
+}
+
+.ne-tooltip-status {
+  font-size: 0.7rem;
+  color: #a4b5d0;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  letter-spacing: 0.12em;
+}
+
+.ne-tooltip-status::before {
+  content: "";
+  display: inline-block;
+  width: 0.4rem;
+  height: 0.4rem;
+  background: #00ff66;
+  border-radius: 50%;
+  box-shadow: 0 0 5px #00ff66;
+}
+
+/* ---------------- Empty-state ---------------- */
+
+.ne-empty {
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.ne-empty-card {
   background: rgba(10, 10, 20, 0.6);
   backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 12px;
+  padding: 1.5rem 2rem;
+  text-align: center;
+  max-width: 28rem;
+}
+
+.ne-empty-title {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.95rem;
+  margin-bottom: 0.5rem;
+}
+
+.ne-empty-hint {
+  font-family: var(--font-mono), monospace;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.ne-empty-hint code {
+  background: rgba(0, 243, 255, 0.08);
+  padding: 2px 6px;
+  border-radius: 3px;
+  color: var(--primary);
+}
+
+/* ---------------- Detail panel (right side, glass) ---------------- */
+
+.ne-detail {
+  position: fixed;
+  top: 50%;
+  right: 1.5rem;
+  transform: translateY(-50%);
+  z-index: 20;
+  width: 22rem;
+  padding: 1.5rem;
+  background: rgba(4, 13, 26, 0.85);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(0, 243, 255, 0.35);
+  border-radius: 8px;
+  box-shadow:
+    0 8px 40px rgba(0, 243, 255, 0.12),
+    inset 0 0 16px rgba(0, 243, 255, 0.04);
+  color: #fff;
+}
+
+.ne-detail-close {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.8rem;
+  color: rgba(255, 255, 255, 0.4);
+  background: none;
+  border: none;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.ne-detail-close:hover {
+  color: #fff;
+}
+
+/* ---------------- Pills (inside detail panel) ---------------- */
+
+.ne-pill {
+  display: inline-block;
+  font-size: 0.65rem;
+  padding: 0.1rem 0.55rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.65);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.ne-pill-featured {
+  background: rgba(245, 158, 11, 0.15);
+  border-color: rgba(245, 158, 11, 0.4);
+  color: #fcd34d;
+}
+
+.ne-pill-gem {
+  background: rgba(234, 179, 8, 0.15);
+  border-color: rgba(234, 179, 8, 0.4);
+  color: #fde047;
+}
+
+/* ---------------- Keyframes ---------------- */
+
+@keyframes ne-pulse {
+  0% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.6); opacity: 0.5; }
+  100% { transform: scale(1); opacity: 1; }
 }

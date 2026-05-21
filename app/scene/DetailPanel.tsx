@@ -1,4 +1,5 @@
-// Side panel shown when you click a node. Displays tool/website info + open link.
+// Side panel shown when you click an entry node. Cyan-glass aesthetic
+// matching the Neural Arbor design.
 
 "use client";
 
@@ -29,78 +30,146 @@ interface Props {
 }
 
 export default function DetailPanel({ entry, category, onClose }: Props) {
+  const accent = category?.color ?? "rgba(0, 243, 255, 0.55)";
+
   return (
     <div
-      className="glass-panel fixed top-1/2 right-6 -translate-y-1/2 z-20 w-80 p-5"
-      style={{ borderColor: category?.color ?? "rgba(255,255,255,0.08)" }}
+      className="ne-detail"
+      style={{
+        borderColor: accent,
+        boxShadow: `0 8px 40px ${hexA(accent, 0.18)}, inset 0 0 16px ${hexA(accent, 0.04)}`,
+      }}
     >
       <button
         type="button"
         onClick={onClose}
-        className="absolute top-3 right-3 text-white/40 hover:text-white text-sm"
+        className="ne-detail-close"
         aria-label="Close"
       >
         ✕
       </button>
 
-      <div className="flex items-start gap-3 mb-3">
+      <div style={{ display: "flex", alignItems: "flex-start", gap: "0.75rem", marginBottom: "0.75rem" }}>
         {entry.logoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={entry.logoUrl}
             alt=""
-            className="w-10 h-10 rounded-md bg-white/5"
+            style={{
+              width: "2.5rem",
+              height: "2.5rem",
+              borderRadius: 6,
+              background: "rgba(255,255,255,0.05)",
+              flexShrink: 0,
+            }}
             onError={(e) => ((e.target as HTMLImageElement).style.display = "none")}
           />
         ) : null}
-        <div className="flex-1 min-w-0">
-          <h2 className="text-base font-semibold text-white truncate">{entry.name}</h2>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <h2
+            style={{
+              fontSize: "1.05rem",
+              fontWeight: 600,
+              color: "#fff",
+              margin: 0,
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {entry.name}
+          </h2>
           {category ? (
-            <div className="text-xs mt-0.5" style={{ color: category.color }}>
+            <div
+              style={{
+                fontSize: "0.72rem",
+                marginTop: "0.25rem",
+                color: accent,
+                letterSpacing: "0.1em",
+                textTransform: "uppercase",
+              }}
+            >
               {category.name}
             </div>
           ) : null}
         </div>
       </div>
 
-      <p className="text-sm text-white/70 leading-relaxed mb-4">{entry.description}</p>
+      <p
+        style={{
+          fontSize: "0.85rem",
+          color: "rgba(255,255,255,0.7)",
+          lineHeight: 1.5,
+          marginBottom: "1rem",
+        }}
+      >
+        {entry.description}
+      </p>
 
-      <div className="flex flex-wrap gap-1.5 mb-4">
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "0.4rem", marginBottom: "1rem" }}>
         {entry.featured ? (
-          <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
-            Featured
-          </span>
+          <span className="ne-pill ne-pill-featured">Featured</span>
         ) : null}
         {entry.gem ? (
-          <span className="text-[10px] px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-300 border border-yellow-500/30">
-            ✨ Gem
-          </span>
+          <span className="ne-pill ne-pill-gem">✨ Gem</span>
         ) : null}
-        <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-white/60 border border-white/10">
-          {entry.pricing}
-        </span>
+        <span className="ne-pill">{entry.pricing}</span>
         {entry.tags.map((tag) => (
-          <span
-            key={tag}
-            className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-white/60 border border-white/10"
-          >
-            {tag}
-          </span>
+          <span key={tag} className="ne-pill">{tag}</span>
         ))}
       </div>
 
       {entry.source ? (
-        <div className="text-[10px] text-white/40 mb-3">Submitted by {entry.source}</div>
+        <div
+          style={{
+            fontSize: "0.7rem",
+            color: "rgba(255,255,255,0.4)",
+            marginBottom: "0.75rem",
+            letterSpacing: "0.05em",
+          }}
+        >
+          Submitted by {entry.source}
+        </div>
       ) : null}
 
       <a
         href={entry.url}
         target="_blank"
         rel="noopener noreferrer"
-        className="block w-full text-center px-4 py-2 rounded-md text-sm font-medium text-white border border-white/15 hover:bg-white/5 transition-colors"
+        style={{
+          display: "block",
+          width: "100%",
+          textAlign: "center",
+          padding: "0.6rem 1rem",
+          borderRadius: 4,
+          fontSize: "0.85rem",
+          fontWeight: 500,
+          color: "#fff",
+          border: `1px solid ${accent}`,
+          background: "transparent",
+          textDecoration: "none",
+          letterSpacing: "0.05em",
+          transition: "background-color 120ms ease",
+        }}
+        onMouseEnter={(e) => (e.currentTarget.style.background = hexA(accent, 0.08))}
+        onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
       >
         Open {entry.url.replace(/^https?:\/\//, "").replace(/\/$/, "")} ↗
       </a>
     </div>
   );
+}
+
+// Add hex alpha (0..1) to a #RRGGBB or rgba()/named color (best-effort).
+function hexA(color: string, alpha: number): string {
+  if (color.startsWith("#") && (color.length === 7 || color.length === 4)) {
+    const h = color.length === 4
+      ? "#" + color.slice(1).split("").map((c) => c + c).join("")
+      : color;
+    const r = parseInt(h.slice(1, 3), 16);
+    const g = parseInt(h.slice(3, 5), 16);
+    const b = parseInt(h.slice(5, 7), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
+  return color; // fallback (e.g. already rgba)
 }

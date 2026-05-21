@@ -1,27 +1,25 @@
-// The actual 3D constellation: nodes (trunk, categories, subcategories, entries)
-// connected by plexus lines, with glow via the parent Scene's Bloom postprocess.
-//
-// Performance notes:
-//   - All entry nodes use one InstancedMesh (one draw call).
-//   - Categories + subcategories are individual meshes (fewer of them, varied colors).
-//   - Lines are one BufferGeometry of merged LineSegments.
+// Tree-shaped point cloud constellation (Neural Arbor visual).
+// Particles are positioned at build time (see scripts/fetch-content.mjs)
+// and rendered via a custom ShaderMaterial for per-particle glow.
 
 "use client";
 
 import { useMemo, useRef, useState } from "react";
 import * as THREE from "three";
-import { useFrame } from "@react-three/fiber";
+import { useFrame, useThree } from "@react-three/fiber";
 import { Html } from "@react-three/drei";
 
 export interface LayoutNode {
   id: string;
-  kind: "trunk" | "category" | "subcategory" | "entry";
+  kind: "trunk" | "category" | "subcategory" | "entry" | "ambient";
   name?: string;
-  color: string;
+  color: [number, number, number];
+  rawColor?: string | null;
   featured?: boolean;
   gem?: boolean;
   parentId?: string | null;
   position: [number, number, number];
+  size: number;
 }
 
 export interface LayoutLink {
@@ -37,192 +35,229 @@ interface Props {
   selectedId: string | null;
 }
 
-export default function Constellation({ nodes, links, onSelectEntry, selectedId }: Props) {
-  const categoryNodes = useMemo(() => nodes.filter((n) => n.kind === "category"), [nodes]);
-  const subcategoryNodes = useMemo(() => nodes.filter((n) => n.kind === "subcategory"), [nodes]);
-  const entryNodes = useMemo(() => nodes.filter((n) => n.kind === "entry"), [nodes]);
-  const trunkNode = useMemo(() => nodes.find((n) => n.kind === "trunk"), [nodes]);
+// Generates a radial glow texture (matches the reference design's gradient)
+function makeGlowTexture(): THREE.Texture {
+  const canvas = document.createElement("canvas");
+  canvas.width = 128;
+  canvas.height = 128;
+  const ctx = canvas.getContext("2d")!;
+  const g = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+  g.addColorStop(0, "rgba(255,255,255,1)");
+  g.addColorStop(0.2, "rgba(255,255,255,0.85)");
+  g.addColorStop(0.5, "rgba(255,255,255,0.25)");
+  g.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 128, 128);
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.needsUpdate = true;
+  return tex;
+}
 
-  const nodeById = useMemo(() => {
-    const map = new Map<string, LayoutNode>();
-    for (const n of nodes) map.set(n.id, n);
-    return map;
+const VERTEX_SHADER = /* glsl */ `
+attribute float size;
+attribute vec3 color;
+varying vec3 vColor;
+void main() {
+  vColor = color;
+  vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+  gl_PointSize = size * (320.0 / -mvPosition.z);
+  gl_Position = projectionMatrix * mvPosition;
+}
+`;
+
+const FRAGMENT_SHADER = /* glsl */ `
+uniform sampler2D pointTexture;
+varying vec3 vColor;
+void main() {
+  vec4 tex = texture2D(pointTexture, gl_PointCoord);
+  gl_FragColor = vec4(vColor, 1.0) * tex;
+  if (gl_FragColor.a < 0.02) discard;
+}
+`;
+
+export default function Constellation({ nodes, links, onSelectEntry, selectedId }: Props) {
+  const { gl } = useThree();
+
+  // --- One-time particle attribute buffers ---
+  const { positionsArr, colorsArr, sizesArr, interactiveLookup } = useMemo(() => {
+    const positions = new Float32Array(nodes.length * 3);
+    const colors = new Float32Array(nodes.length * 3);
+    const sizes = new Float32Array(nodes.length);
+    const lookup: Array<LayoutNode | null> = new Array(nodes.length).fill(null);
+    for (let i = 0; i < nodes.length; i++) {
+      const n = nodes[i];
+      positions[i * 3] = n.position[0];
+      positions[i * 3 + 1] = n.position[1];
+      positions[i * 3 + 2] = n.position[2];
+      colors[i * 3] = n.color[0];
+      colors[i * 3 + 1] = n.color[1];
+      colors[i * 3 + 2] = n.color[2];
+      sizes[i] = n.size;
+      // Only entries / categories / subcategories are interactive
+      if (n.kind === "entry" || n.kind === "category" || n.kind === "subcategory") {
+        lookup[i] = n;
+      }
+    }
+    return { positionsArr: positions, colorsArr: colors, sizesArr: sizes, interactiveLookup: lookup };
   }, [nodes]);
 
-  // --- Lines (plexus) ---
-  const lineGeometry = useMemo(() => {
-    const positions: number[] = [];
-    const colors: number[] = [];
+  // --- Plexus line buffer (vertex colors blend between endpoints) ---
+  const { linePositions, lineColors } = useMemo(() => {
+    const nodeById = new Map(nodes.map((n) => [n.id, n]));
+    const pos: number[] = [];
+    const col: number[] = [];
     for (const link of links) {
       const a = nodeById.get(link.source);
       const b = nodeById.get(link.target);
       if (!a || !b) continue;
-      positions.push(...a.position, ...b.position);
-      const ac = new THREE.Color(a.color);
-      const bc = new THREE.Color(b.color);
-      colors.push(ac.r, ac.g, ac.b, bc.r, bc.g, bc.b);
+      pos.push(a.position[0], a.position[1], a.position[2], b.position[0], b.position[1], b.position[2]);
+      col.push(a.color[0], a.color[1], a.color[2], b.color[0], b.color[1], b.color[2]);
     }
-    const geom = new THREE.BufferGeometry();
-    geom.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-    geom.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
-    return geom;
-  }, [links, nodeById]);
+    return { linePositions: new Float32Array(pos), lineColors: new Float32Array(col) };
+  }, [links, nodes]);
 
-  // --- Entries: InstancedMesh ---
-  const instancedRef = useRef<THREE.InstancedMesh>(null!);
-  const entryMaterial = useMemo(
-    () =>
-      new THREE.MeshStandardMaterial({
-        emissiveIntensity: 1.4,
-        roughness: 0.4,
-        metalness: 0,
-      }),
+  const shaderUniforms = useMemo(
+    () => ({ pointTexture: { value: makeGlowTexture() } }),
     []
   );
 
-  useMemo(() => {
-    if (!instancedRef.current) return;
-    const dummy = new THREE.Object3D();
-    const color = new THREE.Color();
-    for (let i = 0; i < entryNodes.length; i++) {
-      const n = entryNodes[i];
-      dummy.position.fromArray(n.position);
-      const scale = n.featured ? 1.6 : n.gem ? 1.2 : 0.85;
-      dummy.scale.setScalar(scale);
-      dummy.updateMatrix();
-      instancedRef.current.setMatrixAt(i, dummy.matrix);
-      color.set(n.color);
-      instancedRef.current.setColorAt(i, color);
-    }
-    instancedRef.current.instanceMatrix.needsUpdate = true;
-    if (instancedRef.current.instanceColor) instancedRef.current.instanceColor.needsUpdate = true;
-  }, [entryNodes]);
+  const treeGroupRef = useRef<THREE.Group>(null);
+  const pointsRef = useRef<THREE.Points>(null);
+  const raycaster = useMemo(() => {
+    const r = new THREE.Raycaster();
+    r.params.Points = { threshold: 1.4 };
+    return r;
+  }, []);
 
-  // Subtle scene-wide rotation so the whole tree feels alive
-  const groupRef = useRef<THREE.Group>(null);
-  useFrame((_, dt) => {
-    if (groupRef.current) groupRef.current.rotation.y += dt * 0.02;
+  const { camera, pointer } = useThree();
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+
+  // Subtle floating animation for the whole tree (matches reference)
+  useFrame((state) => {
+    const t = state.clock.elapsedTime;
+    if (treeGroupRef.current) {
+      treeGroupRef.current.position.y = Math.sin(t * 0.5) * 1.6;
+    }
+    // Per-frame raycast to find hovered interactive particle
+    if (pointsRef.current) {
+      raycaster.setFromCamera(pointer, camera);
+      const hits = raycaster.intersectObject(pointsRef.current);
+      let foundId: string | null = null;
+      for (const hit of hits) {
+        const idx = hit.index ?? -1;
+        const candidate = interactiveLookup[idx];
+        if (candidate) {
+          foundId = candidate.id;
+          break;
+        }
+      }
+      if (foundId !== hoveredId) setHoveredId(foundId);
+    }
   });
 
-  const [hoveredId, setHoveredId] = useState<string | null>(null);
-  const hovered = hoveredId ? nodeById.get(hoveredId) : null;
+  const hoveredNode = hoveredId ? nodes.find((n) => n.id === hoveredId) : null;
+  const selectedNode = selectedId ? nodes.find((n) => n.id === selectedId) : null;
+
+  // Side effect: cursor pointer on hover of clickable nodes
+  useMemo(() => {
+    if (typeof document === "undefined") return;
+    document.body.style.cursor = hoveredId ? "pointer" : "default";
+  }, [hoveredId]);
 
   return (
-    <group ref={groupRef}>
+    <group ref={treeGroupRef}>
       {/* Plexus lines */}
-      <lineSegments geometry={lineGeometry}>
-        <lineBasicMaterial
-          vertexColors
-          transparent
-          opacity={0.35}
-          blending={THREE.AdditiveBlending}
-          depthWrite={false}
-        />
-      </lineSegments>
-
-      {/* Trunk: small glowing core */}
-      {trunkNode ? (
-        <mesh position={trunkNode.position}>
-          <sphereGeometry args={[3, 32, 32]} />
-          <meshStandardMaterial color="#ffffff" emissive="#ffffff" emissiveIntensity={2} toneMapped={false} />
-        </mesh>
+      {linePositions.length > 0 ? (
+        <lineSegments>
+          <bufferGeometry>
+            <bufferAttribute attach="attributes-position" args={[linePositions, 3]} />
+            <bufferAttribute attach="attributes-color" args={[lineColors, 3]} />
+          </bufferGeometry>
+          <lineBasicMaterial
+            vertexColors
+            transparent
+            opacity={0.22}
+            blending={THREE.AdditiveBlending}
+            depthWrite={false}
+          />
+        </lineSegments>
       ) : null}
 
-      {/* Category anchors */}
-      {categoryNodes.map((n) => (
-        <mesh
-          key={n.id}
-          position={n.position}
-          onPointerOver={(e) => {
-            e.stopPropagation();
-            setHoveredId(n.id);
-          }}
-          onPointerOut={() => setHoveredId(null)}
-        >
-          <sphereGeometry args={[3.5, 24, 24]} />
-          <meshStandardMaterial
-            color={n.color}
-            emissive={n.color}
-            emissiveIntensity={2.5}
-            toneMapped={false}
-          />
-        </mesh>
-      ))}
-
-      {/* Subcategory anchors */}
-      {subcategoryNodes.map((n) => (
-        <mesh
-          key={n.id}
-          position={n.position}
-          onPointerOver={(e) => {
-            e.stopPropagation();
-            setHoveredId(n.id);
-          }}
-          onPointerOut={() => setHoveredId(null)}
-        >
-          <sphereGeometry args={[1.8, 16, 16]} />
-          <meshStandardMaterial
-            color={n.color}
-            emissive={n.color}
-            emissiveIntensity={1.8}
-            toneMapped={false}
-          />
-        </mesh>
-      ))}
-
-      {/* Entries: InstancedMesh */}
-      <instancedMesh
-        ref={instancedRef}
-        args={[undefined, undefined, entryNodes.length]}
-        material={entryMaterial}
-        onPointerOver={(e) => {
+      {/* The particle cloud */}
+      <points
+        ref={pointsRef}
+        onPointerDown={(e) => {
           e.stopPropagation();
-          const id = entryNodes[e.instanceId ?? 0]?.id;
-          if (id) setHoveredId(id);
-        }}
-        onPointerOut={() => setHoveredId(null)}
-        onClick={(e) => {
-          e.stopPropagation();
-          const id = entryNodes[e.instanceId ?? 0]?.id;
-          if (id) onSelectEntry(id);
+          const idx = e.index ?? -1;
+          const n = interactiveLookup[idx];
+          if (n && n.kind === "entry") {
+            onSelectEntry(n.id);
+          }
         }}
       >
-        <sphereGeometry args={[1, 12, 12]} />
-      </instancedMesh>
+        <bufferGeometry>
+          <bufferAttribute attach="attributes-position" args={[positionsArr, 3]} />
+          <bufferAttribute attach="attributes-color" args={[colorsArr, 3]} />
+          <bufferAttribute attach="attributes-size" args={[sizesArr, 1]} />
+        </bufferGeometry>
+        <shaderMaterial
+          args={[
+            {
+              uniforms: shaderUniforms,
+              vertexShader: VERTEX_SHADER,
+              fragmentShader: FRAGMENT_SHADER,
+              transparent: true,
+              depthTest: false,
+              blending: THREE.AdditiveBlending,
+            },
+          ]}
+        />
+      </points>
 
-      {/* Hover label */}
-      {hovered ? (
+      {/* Hover tooltip — only for interactive nodes with a name */}
+      {hoveredNode && hoveredNode.name ? (
         <Html
-          position={hovered.position}
+          position={hoveredNode.position}
           center
-          distanceFactor={120}
-          style={{
-            pointerEvents: "none",
-            color: "white",
-            fontSize: "12px",
-            background: "rgba(10,10,20,0.85)",
-            padding: "4px 10px",
-            borderRadius: "6px",
-            border: `1px solid ${hovered.color}`,
-            whiteSpace: "nowrap",
-            transform: "translate(0, -24px)",
-          }}
+          distanceFactor={140}
+          style={{ pointerEvents: "none" }}
         >
-          {hovered.name ?? hovered.id}
+          <div className="ne-tooltip">
+            <div className="ne-tooltip-name">{hoveredNode.name}</div>
+            <div className="ne-tooltip-status">
+              {hoveredNode.kind === "entry"
+                ? hoveredNode.featured
+                  ? "FEATURED NODE"
+                  : hoveredNode.gem
+                  ? "HIDDEN GEM"
+                  : "ACTIVE DATA NODE"
+                : hoveredNode.kind === "category"
+                ? "CATEGORY BRANCH"
+                : "SUBCATEGORY"}
+            </div>
+          </div>
         </Html>
       ) : null}
 
-      {/* Selected highlight ring */}
-      {selectedId ? (() => {
-        const sel = nodeById.get(selectedId);
-        if (!sel) return null;
-        return (
-          <mesh position={sel.position}>
-            <ringGeometry args={[2.5, 3.0, 32]} />
-            <meshBasicMaterial color={sel.color} side={THREE.DoubleSide} transparent opacity={0.7} />
-          </mesh>
-        );
-      })() : null}
+      {/* Selection ring */}
+      {selectedNode ? (
+        <mesh position={selectedNode.position}>
+          <ringGeometry args={[selectedNode.size * 1.3, selectedNode.size * 1.55, 32]} />
+          <meshBasicMaterial
+            color={
+              new THREE.Color(
+                selectedNode.color[0],
+                selectedNode.color[1],
+                selectedNode.color[2]
+              )
+            }
+            transparent
+            opacity={0.8}
+            side={THREE.DoubleSide}
+            toneMapped={false}
+          />
+        </mesh>
+      ) : null}
     </group>
   );
 }

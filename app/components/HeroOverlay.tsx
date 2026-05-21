@@ -1,5 +1,6 @@
-// Floating overlay shown over the constellation.
-// Shows title + tagline + tool count. Will gain search + category menu in next iteration.
+// Floating overlay over the constellation: header (top-left), stats (top-right),
+// controls hint (bottom). Matches the Neural Arbor aesthetic — thin uppercase,
+// pulsing cyan dot, faint vignette gradients.
 
 "use client";
 
@@ -19,37 +20,44 @@ export default function HeroOverlay({ stats }: Props) {
   return (
     <>
       {/* Top-left brand */}
-      <div className="fixed top-6 left-6 z-10 pointer-events-none">
-        <h1 className="text-xl font-semibold tracking-tight text-white">
-          AI <span className="opacity-60">Tree</span> Library
+      <div className="ne-header">
+        <h1 className="ne-title">
+          <span className="ne-dot" />
+          AI Tree Library
         </h1>
-        <p className="mt-1 text-xs text-white/40">
-          A 3D constellation of curated AI tools, design inspo, and creative resources.
-        </p>
+        <p className="ne-subtitle">A living network of AI tools, design inspo &amp; creative resources</p>
       </div>
 
       {/* Top-right stats */}
       {stats ? (
-        <div className="fixed top-6 right-6 z-10 pointer-events-none text-right text-xs text-white/40">
-          <div>{stats.entries} entries</div>
-          <div>{stats.topLevel} categories</div>
-          <div>{stats.gems} gems · {stats.featured} featured</div>
+        <div className="ne-stats">
+          <div className="ne-stat-line">
+            <span className="ne-stat-value">{stats.entries}</span> <span className="ne-stat-label">nodes</span>
+          </div>
+          <div className="ne-stat-line">
+            <span className="ne-stat-value">{stats.topLevel}</span> <span className="ne-stat-label">categories</span>
+          </div>
+          <div className="ne-stat-line">
+            <span className="ne-stat-value">{stats.gems}</span> <span className="ne-stat-label">gems</span>
+            <span className="ne-stat-sep">·</span>
+            <span className="ne-stat-value">{stats.featured}</span> <span className="ne-stat-label">featured</span>
+          </div>
         </div>
       ) : (
-        <div className="fixed top-6 right-6 z-10 pointer-events-none text-right text-xs text-amber-400/70">
-          library.json not generated yet — run `npm run fetch-content`
-        </div>
+        <div className="ne-stats ne-stats-warn">library.json not generated yet</div>
       )}
 
-      {/* Empty-state placeholder */}
+      {/* Bottom hint */}
+      <div className="ne-controls-hint">
+        DRAG TO ROTATE &nbsp;|&nbsp; SCROLL TO ZOOM &nbsp;|&nbsp; HOVER TO INSPECT &nbsp;|&nbsp; CLICK TO OPEN
+      </div>
+
+      {/* Empty-state center card */}
       {!stats ? (
-        <div className="fixed inset-0 z-0 flex items-center justify-center pointer-events-none">
-          <div className="glass-panel px-8 py-6 max-w-sm text-center">
-            <div className="text-sm text-white/60 mb-2">Constellation not yet generated.</div>
-            <div className="text-xs text-white/40 font-mono">
-              Set NOTION_TOKEN in .env.local<br />
-              then run `npm run fetch-content`
-            </div>
+        <div className="ne-empty">
+          <div className="ne-empty-card">
+            <div className="ne-empty-title">Constellation not yet generated.</div>
+            <div className="ne-empty-hint">Set NOTION_TOKEN in .env.local then run <code>npm run fetch-content</code></div>
           </div>
         </div>
       ) : null}

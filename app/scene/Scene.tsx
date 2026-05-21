@@ -1,12 +1,14 @@
-// Top-level R3F Canvas wrapper for the constellation.
-// Client-only (uses WebGL). Imported via next/dynamic with ssr:false from page.tsx.
+// R3F Canvas wrapper for the Neural Arbor tree.
+// Background dust, FogExp2, auto-rotate, custom-shader particle cloud.
+// No EffectComposer/Bloom — the glow comes from the per-particle radial texture
+// + additive blending in Constellation.tsx.
 
 "use client";
 
-import { Canvas } from "@react-three/fiber";
-import { OrbitControls, Stars } from "@react-three/drei";
-import { EffectComposer, Bloom } from "@react-three/postprocessing";
-import { Suspense, useMemo, useState } from "react";
+import { Canvas, useFrame } from "@react-three/fiber";
+import { OrbitControls } from "@react-three/drei";
+import { Suspense, useMemo, useRef, useState } from "react";
+import * as THREE from "three";
 import Constellation, { type LayoutNode, type LayoutLink } from "./Constellation";
 import DetailPanel from "./DetailPanel";
 
@@ -40,36 +42,72 @@ interface Props {
   library: LibraryFile;
 }
 
+// Background ambient dust — 800 faint specks drifting around the tree.
+function Dust() {
+  const ref = useRef<THREE.Points>(null);
+  const { positions } = useMemo(() => {
+    const count = 800;
+    const arr = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) {
+      arr[i * 3] = (Math.random() - 0.5) * 400;
+      arr[i * 3 + 1] = (Math.random() - 0.5) * 400;
+      arr[i * 3 + 2] = (Math.random() - 0.5) * 400;
+    }
+    return { positions: arr };
+  }, []);
+  useFrame((state) => {
+    if (ref.current) {
+      ref.current.rotation.y = state.clock.elapsedTime * 0.02;
+      ref.current.rotation.x = state.clock.elapsedTime * 0.01;
+    }
+  });
+  return (
+    <points ref={ref}>
+      <bufferGeometry>
+        <bufferAttribute attach="attributes-position" args={[positions, 3]} />
+      </bufferGeometry>
+      <pointsMaterial
+        color="#445577"
+        size={1.5}
+        transparent
+        opacity={0.35}
+        blending={THREE.AdditiveBlending}
+        sizeAttenuation
+        depthWrite={false}
+      />
+    </points>
+  );
+}
+
 export default function Scene({ library }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const entryById = useMemo(() => {
-    const map = new Map<string, LibraryFile["entries"][number]>();
-    for (const e of library.entries) map.set(e.id, e);
-    return map;
+    const m = new Map<string, LibraryFile["entries"][number]>();
+    for (const e of library.entries) m.set(e.id, e);
+    return m;
   }, [library.entries]);
 
   const categoryById = useMemo(() => {
-    const map = new Map<string, LibraryFile["categories"][number]>();
-    for (const c of library.categories) map.set(c.id, c);
-    return map;
+    const m = new Map<string, LibraryFile["categories"][number]>();
+    for (const c of library.categories) m.set(c.id, c);
+    return m;
   }, [library.categories]);
 
-  const selected = selectedId ? (entryById.get(selectedId) ?? null) : null;
-  const selectedCategory = selected?.categoryId ? categoryById.get(selected.categoryId) : null;
+  const selected = selectedId ? entryById.get(selectedId) ?? null : null;
+  const selectedCategory = selected?.categoryId ? categoryById.get(selected.categoryId) ?? null : null;
 
   return (
     <>
       <Canvas
-        camera={{ position: [180, 80, 220], fov: 50, near: 0.1, far: 2000 }}
+        camera={{ position: [0, 30, 180], fov: 60, near: 0.1, far: 1000 }}
         dpr={[1, 2]}
         gl={{ antialias: true, alpha: true }}
       >
-        <color attach="background" args={["#050510"]} />
-        <fog attach="fog" args={["#050510", 200, 800]} />
-        <ambientLight intensity={0.2} />
+        <color attach="background" args={["#030508"]} />
+        <fogExp2 attach="fog" args={["#030508", 0.003]} />
         <Suspense fallback={null}>
-          <Stars radius={400} depth={80} count={1500} factor={3} fade speed={0.5} />
+          <Dust />
           <Constellation
             nodes={library.layout.nodes}
             links={library.layout.links}
@@ -81,13 +119,11 @@ export default function Scene({ library }: Props) {
           enableDamping
           dampingFactor={0.05}
           autoRotate
-          autoRotateSpeed={0.15}
-          minDistance={40}
-          maxDistance={500}
+          autoRotateSpeed={0.5}
+          minDistance={20}
+          maxDistance={350}
+          target={[0, 10, 0]}
         />
-        <EffectComposer multisampling={0}>
-          <Bloom intensity={1.4} luminanceThreshold={0.2} luminanceSmoothing={0.9} mipmapBlur />
-        </EffectComposer>
       </Canvas>
       {selected ? (
         <DetailPanel

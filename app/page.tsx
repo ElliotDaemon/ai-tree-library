@@ -44,13 +44,15 @@ interface LibraryFile {
   layout: {
     nodes: Array<{
       id: string;
-      kind: "trunk" | "category" | "subcategory" | "entry";
+      kind: "trunk" | "category" | "subcategory" | "entry" | "ambient";
       name?: string;
-      color: string;
+      color: [number, number, number];
+      rawColor?: string | null;
       featured?: boolean;
       gem?: boolean;
       parentId?: string | null;
       position: [number, number, number];
+      size: number;
     }>;
     links: Array<{ source: string; target: string; kind: string }>;
   };
