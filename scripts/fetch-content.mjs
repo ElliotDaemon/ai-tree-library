@@ -50,28 +50,83 @@ function num(p) { return p?.number ?? null; }
 function url(p) { return p?.url ?? ""; }
 function rel(p) { return p?.relation?.[0]?.id ?? null; }
 
+// ===== Slug system (mirrors lib/slug.ts) =====
+const RESERVED_SLUGS = new Set([
+  "_next", "api", "sw", "favicon", "favicon.ico", "icon", "icon.svg",
+  "manifest", "manifest.json", "opengraph-image", "twitter-image",
+  "robots", "robots.txt", "sitemap", "sitemap.xml",
+  "category", "c", "tools", "tool", "privacy", "terms", "about",
+  "search", "submit", "portal", "admin", "dashboard",
+  "llms", "llms.txt", "llms-full", "llms-full.txt",
+  "", "index", "home", "404", "500",
+]);
+function slugify(input) {
+  return String(input || "")
+    .normalize("NFKD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s\-_/]/g, "")
+    .replace(/[\s_/]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+}
+function uniqueSlug(base, id, taken) {
+  let candidate = base;
+  if (!candidate || RESERVED_SLUGS.has(candidate)) {
+    candidate = `${candidate || "x"}-${id.replace(/-/g, "").slice(-4)}`;
+  }
+  if (!taken.has(candidate)) { taken.add(candidate); return candidate; }
+  const suffix = id.replace(/-/g, "").slice(-4);
+  const withSuffix = `${candidate}-${suffix}`;
+  if (!taken.has(withSuffix)) { taken.add(withSuffix); return withSuffix; }
+  let n = 2;
+  while (taken.has(`${withSuffix}-${n}`)) n++;
+  const final = `${withSuffix}-${n}`;
+  taken.add(final);
+  return final;
+}
+
 console.log("[fetch-content] Fetching Categories...");
 const catRows = await fetchAll(CATEGORIES_DS);
-const categories = catRows.map((p) => ({
+const categoriesRaw = catRows.map((p) => ({
   id: p.id,
   name: text(p.properties.Name),
-  slug: text(p.properties.Slug),
+  rawSlug: text(p.properties.Slug),
+  slugOverride: text(p.properties["Slug Override"]),
+  description: text(p.properties.Description),
   color: text(p.properties.Color) || "#888",
   parentName: text(p.properties.Parent),
   isTopLevel: cb(p.properties["Is Top Level"]),
   displayOrder: num(p.properties["Display Order"]) ?? 999,
   v1ToolCount: num(p.properties["V1 Tool Count"]) ?? 0,
 }));
+
+// Assign URL-safe slugs to categories (top-level cats get clean slugs; subs
+// keep an internal slug but aren't directly URL-routable on their own page).
+const takenCatSlugs = new Set();
+const categories = categoriesRaw.map((c) => {
+  if (!c.isTopLevel) {
+    // Subcategories use a path-segment slug for build-time queries only.
+    const base = slugify(c.slugOverride || c.rawSlug || c.name) || "sub";
+    return { ...c, slug: `${slugify(c.parentName) || "cat"}--${base}` };
+  }
+  const base = slugify(c.slugOverride) || slugify(c.rawSlug) || slugify(c.name);
+  const finalSlug = uniqueSlug(base, c.id, takenCatSlugs);
+  return { ...c, slug: finalSlug };
+});
 console.log(`[fetch-content] Categories: ${categories.length} (${categories.filter(c => c.isTopLevel).length} top-level)`);
 
 console.log("[fetch-content] Fetching Library (Status=Ready)...");
 const libRows = await fetchAll(LIBRARY_DS, { property: "Status", select: { equals: "Ready" } });
-const entries = libRows.map((p) => ({
+const entriesRaw = libRows.map((p) => ({
   id: p.id,
   name: text(p.properties.Name),
   url: url(p.properties.URL),
   type: sel(p.properties.Type) || "Tool",
   description: text(p.properties.Description),
+  longDescription: text(p.properties["LongDescription"]),
+  slugOverride: text(p.properties["Slug Override"]),
   categoryId: rel(p.properties.Category),
   tags: multi(p.properties.Tags),
   pricing: sel(p.properties.Pricing) || "Unknown",
@@ -82,7 +137,17 @@ const entries = libRows.map((p) => ({
   screenshotUrl: url(p.properties["Screenshot URL"]),
   source: text(p.properties.Source),
 }));
+
+// Assign URL-safe slugs to every entry. Reserved slugs and collisions get
+// suffixed with the last 4 chars of the Notion UUID.
+const takenEntrySlugs = new Set(takenCatSlugs); // entries can't collide with category slugs either
+const entries = entriesRaw.map((e) => {
+  const base = slugify(e.slugOverride) || slugify(e.name) || slugify(e.url);
+  const slug = uniqueSlug(base || "tool", e.id, takenEntrySlugs);
+  return { ...e, slug };
+});
 console.log(`[fetch-content] Entries: ${entries.length}`);
+console.log(`[fetch-content] Slugs: ${takenEntrySlugs.size} unique (cats + tools combined)`);
 
 function rarityKey(entry) {
   if (entry.rarity) {
