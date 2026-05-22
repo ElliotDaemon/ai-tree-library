@@ -10,6 +10,7 @@ import {
 } from "../../../lib/library";
 import CategoryPageBody from "../../components/CategoryPageBody";
 import { CategoryJsonLd, CategoryBreadcrumb } from "../../components/JsonLd";
+import { CategoryViewTracker } from "../../components/PageViewTracker";
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -64,6 +65,7 @@ export default async function CategoryPage({ params }: PageProps) {
     <>
       <CategoryJsonLd category={category} entries={entries} />
       <CategoryBreadcrumb category={category} />
+      <CategoryViewTracker slug={category.slug} name={category.name} />
       <CategoryPageBody category={category} subcategories={subcategories} entries={entries} />
     </>
   );

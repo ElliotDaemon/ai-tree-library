@@ -15,6 +15,7 @@ import {
 import { isReserved } from "../../lib/slug";
 import ToolPageBody from "../components/ToolPageBody";
 import { ToolJsonLd, ToolBreadcrumb } from "../components/JsonLd";
+import { ToolViewTracker } from "../components/PageViewTracker";
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -73,6 +74,7 @@ export default async function ToolPage({ params }: PageProps) {
     <>
       <ToolJsonLd entry={entry} category={category} topLevel={topLevel} />
       <ToolBreadcrumb entry={entry} topLevel={topLevel} />
+      <ToolViewTracker slug={entry.slug} name={entry.name} category={topLevel?.name} rarity={entry.rarity} />
       <ToolPageBody entry={entry} category={category} topLevel={topLevel} related={related} />
     </>
   );

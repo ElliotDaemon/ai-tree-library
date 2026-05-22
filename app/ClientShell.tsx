@@ -12,6 +12,7 @@ import CreditBadge from "./components/CreditBadge";
 import type { FilterState } from "./components/FilterBar";
 import ListPopup from "./components/ListPopup";
 import type { LayoutNode } from "./scene/Constellation";
+import { trackNodeDive, trackFilterApply, trackFlightToggle, trackListOpen } from "../lib/track";
 
 const Scene = dynamic(() => import("./scene/Scene"), { ssr: false });
 
@@ -112,8 +113,48 @@ export default function ClientShell({ library }: Props) {
     return visible;
   }, [filter, library]);
 
-  const handleToggleFlight = useCallback(() => setFlightMode((v) => !v), []);
-  const handleDive = useCallback((id: string) => setDiveTargetId(id), []);
+  const handleToggleFlight = useCallback(() => {
+    setFlightMode((v) => {
+      trackFlightToggle({ enabled: !v });
+      return !v;
+    });
+  }, []);
+
+  const handleDive = useCallback(
+    (id: string, source: "constellation" | "search" | "list" | "related" = "constellation") => {
+      setDiveTargetId(id);
+      if (library) {
+        const entry = library.entries.find((e) => e.id === id);
+        const category = library.categories.find((c) => c.id === entry?.categoryId);
+        const top = category?.isTopLevel
+          ? category
+          : library.categories.find((c) => c.isTopLevel && c.name === category?.parentName);
+        const node = library.layout.nodes.find((n) => n.id === id);
+        trackNodeDive({
+          id,
+          name: entry?.name ?? node?.name ?? id,
+          kind: node?.kind ?? (entry ? "entry" : "unknown"),
+          category: top?.name,
+          rarity: node?.rarity ?? undefined,
+          source,
+        });
+      }
+    },
+    [library]
+  );
+
+  const handleFilterChange = useCallback((f: FilterState) => {
+    setFilter(f);
+    if (f.kind === "category") trackFilterApply({ kind: "category", value: f.categoryName });
+    else if (f.kind === "rarity") trackFilterApply({ kind: "rarity", value: f.rarity });
+    else if (f.kind === "type") trackFilterApply({ kind: "type", value: f.type });
+    else trackFilterApply({ kind: "clear", value: "" });
+  }, []);
+
+  const handleListOpen = useCallback(() => {
+    setListOpen(true);
+    trackListOpen();
+  }, []);
 
   return (
     <>
@@ -143,12 +184,12 @@ export default function ClientShell({ library }: Props) {
           stats={library.stats}
           generatedAt={library.generatedAt}
           onHighlight={setHighlightIds}
-          onDive={handleDive}
-          onListOpen={() => setListOpen(true)}
+          onDive={(id) => handleDive(id, "search")}
+          onListOpen={handleListOpen}
           flightMode={flightMode}
           onToggleFlight={handleToggleFlight}
           filter={filter}
-          onFilterChange={setFilter}
+          onFilterChange={handleFilterChange}
         />
       ) : null}
 
@@ -162,7 +203,7 @@ export default function ClientShell({ library }: Props) {
           onClose={() => setListOpen(false)}
           entries={library.entries}
           categories={library.categories}
-          onDive={handleDive}
+          onDive={(id) => handleDive(id, "list")}
         />
       ) : null}
     </>

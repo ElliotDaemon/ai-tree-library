@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { LibraryEntry, LibraryCategory } from "../../lib/library";
 import { rarityMeta, hostnameOf } from "../../lib/library";
 import Footer from "./Footer";
+import VisitButton from "./VisitButton";
 
 interface Props {
   entry: LibraryEntry;
@@ -74,16 +75,9 @@ export default function ToolPageBody({ entry, category, topLevel, related }: Pro
           {entry.featured ? <span className="tp-pill tp-pill-featured">Featured</span> : null}
         </div>
 
-        <a
-          href={entry.url}
-          className="tp-visit"
-          target="_blank"
-          rel="noopener noreferrer nofollow"
-          data-tool-slug={entry.slug}
-          data-tool-name={entry.name}
-        >
+        <VisitButton url={entry.url} name={entry.name} slug={entry.slug}>
           Visit {host} ↗
-        </a>
+        </VisitButton>
         <p className="tp-disclaimer">External link. Not endorsed — curated for usefulness.</p>
 
         {paras.length > 0 ? (

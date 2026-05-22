@@ -6,6 +6,7 @@
 
 import type { DivedNode } from "../scene/Scene";
 import type { LayoutNode } from "../scene/Constellation";
+import { trackLinkClick } from "../../lib/track";
 
 interface Library {
   entries: Array<{
@@ -102,7 +103,14 @@ export default function DataPanel({ divedData, library, onBack, onSelectRelated 
         ) : null}
 
         {entry?.url ? (
-          <a className="ne-panel-link" href={entry.url} target="_blank" rel="noopener noreferrer" style={{ borderColor: accent, color: accent }}>
+          <a
+            className="ne-panel-link"
+            href={entry.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ borderColor: accent, color: accent }}
+            onClick={() => trackLinkClick({ name: entry.name, destination: entry.url, source: "data_panel" })}
+          >
             Open {entry.url.replace(/^https?:\/\//, "").replace(/\/$/, "")} ↗
           </a>
         ) : null}
