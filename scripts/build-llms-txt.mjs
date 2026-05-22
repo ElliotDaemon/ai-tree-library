@@ -91,7 +91,7 @@ for (const cat of topLevel) {
     brief.push(line);
   }
   brief.push("");
-  brief.push("Full ${cat.name} catalog: " + SITE + "/category/" + cat.slug);
+  brief.push(`Full ${cat.name} catalog: ${SITE}/category/${cat.slug}`);
   brief.push("");
 }
 
