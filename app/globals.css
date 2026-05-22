@@ -9,13 +9,20 @@
   --muted: #8b9bb4;
   --dim: #566b8e;
 
-  /* Liquid glass tokens — used everywhere */
-  --glass-bg: rgba(7, 14, 28, 0.42);
-  --glass-bg-strong: rgba(7, 14, 28, 0.62);
-  --glass-border: rgba(0, 243, 255, 0.18);
-  --glass-border-strong: rgba(0, 243, 255, 0.5);
-  --glass-blur: blur(28px) saturate(180%);
-  --glass-shadow: 0 10px 50px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.03) inset, 0 0 30px rgba(0, 243, 255, 0.06);
+  /* Liquid glass tokens — used everywhere. Tuned for high-quality refraction. */
+  --glass-bg: rgba(7, 14, 28, 0.38);
+  --glass-bg-strong: rgba(7, 14, 28, 0.55);
+  --glass-border: rgba(0, 243, 255, 0.22);
+  --glass-border-strong: rgba(0, 243, 255, 0.55);
+  --glass-blur: blur(36px) saturate(200%) brightness(105%);
+  --glass-blur-light: blur(20px) saturate(180%);
+  --glass-shadow:
+    0 14px 60px rgba(0, 0, 0, 0.55),
+    0 0 0 1px rgba(255, 255, 255, 0.04) inset,
+    0 0 40px rgba(0, 243, 255, 0.08),
+    0 1px 0 rgba(255, 255, 255, 0.07) inset;
+  /* Liquid easing — slow start, gentle finish, no bounce. */
+  --liquid-ease: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 @theme inline {
@@ -45,41 +52,100 @@ body {
 .ne-scene { position: fixed; inset: 0; }
 
 /* ============================================================
-   Minimal corner wordmark
+   Brand mark — tree logo + title + slogan (top-left)
    ============================================================ */
 
-.ne-mark {
+.ne-brand {
   position: fixed;
   top: 1.4rem;
   left: 1.6rem;
   z-index: 12;
   display: flex;
-  align-items: center;
-  gap: 0.6rem;
+  align-items: flex-start;
+  gap: 0.85rem;
+  max-width: 22rem;
   pointer-events: none;
-  transition: opacity 0.4s ease, transform 0.4s ease;
+  transition: opacity 0.5s ease, transform 0.5s ease;
 }
 
-.ne-mark.ne-hidden { opacity: 0; transform: translateY(-12px); }
+.ne-brand.ne-hidden { opacity: 0; transform: translateY(-14px); }
 
-.ne-mark-dot {
-  width: 0.55rem;
-  height: 0.55rem;
-  background: var(--primary);
-  border-radius: 50%;
-  box-shadow: 0 0 14px var(--primary);
-  animation: ne-pulse 2s infinite;
+.ne-brand-logo {
+  color: var(--primary);
+  filter: drop-shadow(0 0 10px rgba(0, 243, 255, 0.45));
   flex-shrink: 0;
+  margin-top: 0.05rem;
 }
 
-.ne-mark-text {
-  font-size: 0.62rem;
-  letter-spacing: 0.42em;
+.ne-brand-text { display: flex; flex-direction: column; gap: 0.25rem; }
+
+.ne-brand-title {
+  font-size: 0.92rem;
+  font-weight: 200;
+  color: #fff;
+  letter-spacing: 0.32em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.78);
-  font-weight: 500;
-  text-shadow: 0 0 18px rgba(0, 243, 255, 0.25);
+  text-shadow: 0 0 22px rgba(0, 243, 255, 0.32);
+  line-height: 1;
 }
+
+.ne-brand-slogan {
+  font-size: 0.6rem;
+  color: var(--muted);
+  letter-spacing: 0.14em;
+  line-height: 1.45;
+  max-width: 19rem;
+  font-weight: 400;
+}
+
+/* ============================================================
+   Stats card — top-right, auto-updating live counts
+   ============================================================ */
+
+.ne-stats-card {
+  position: fixed;
+  top: 1.4rem;
+  right: 1.6rem;
+  z-index: 12;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 14px;
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-shadow);
+  padding: 0.7rem 1rem;
+  text-align: right;
+  pointer-events: none;
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+
+.ne-stats-card.ne-hidden { opacity: 0; transform: translateY(-14px); }
+
+.ne-stats-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 0.35rem;
+  margin-bottom: 0.18rem;
+  font-size: 0.62rem;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+.ne-stats-row:last-child { margin-bottom: 0; }
+
+.ne-stats-num {
+  color: var(--primary);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.74rem;
+  letter-spacing: 0.02em;
+  text-shadow: 0 0 8px rgba(0, 243, 255, 0.35);
+}
+
+.ne-stats-label { color: rgba(255, 255, 255, 0.65); }
+.ne-stats-sep { color: rgba(255, 255, 255, 0.18); margin: 0 0.15rem; }
 
 /* ============================================================
    Bottom hint (subtle, contextual)
@@ -87,16 +153,16 @@ body {
 
 .ne-hint {
   position: fixed;
-  bottom: 1.2rem;
+  bottom: 1.4rem;
   left: 50%;
   transform: translateX(-50%);
   z-index: 11;
-  font-size: 0.65rem;
+  font-size: 0.62rem;
   letter-spacing: 0.22em;
-  color: rgba(150, 170, 200, 0.45);
+  color: rgba(150, 170, 200, 0.4);
   text-transform: uppercase;
   pointer-events: none;
-  transition: opacity 0.4s ease, transform 0.4s ease;
+  transition: opacity 0.5s ease, transform 0.5s ease;
   white-space: nowrap;
 }
 
@@ -123,55 +189,80 @@ body {
 
 .ne-blob {
   position: fixed;
-  top: 1.4rem;
+  bottom: 5rem;
   left: 50%;
   transform: translateX(-50%);
   z-index: 12;
-  background: var(--glass-bg);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, transparent 35%, rgba(0, 0, 0, 0.05) 100%),
+    var(--glass-bg);
   border: 1px solid var(--glass-border);
   border-radius: 999px;
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
   box-shadow: var(--glass-shadow);
-  transition:
-    width 0.45s cubic-bezier(0.34, 1.56, 0.64, 1),
-    height 0.45s cubic-bezier(0.34, 1.56, 0.64, 1),
-    border-radius 0.4s ease,
-    border-color 0.3s ease,
-    padding 0.4s ease;
-  overflow: hidden;
+  /* Overflow visible so filter dropdowns can extend below the blob */
+  overflow: visible;
   pointer-events: auto;
+  transition:
+    width 0.7s var(--liquid-ease),
+    max-width 0.7s var(--liquid-ease),
+    height 0.6s var(--liquid-ease),
+    padding 0.6s var(--liquid-ease),
+    border-radius 0.65s var(--liquid-ease),
+    border-color 0.4s ease,
+    box-shadow 0.6s ease,
+    background 0.5s ease;
+}
+
+.ne-blob::before {
+  /* Soft inner highlight for liquid feel */
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(ellipse at 50% 0%, rgba(0, 243, 255, 0.08), transparent 70%);
+  pointer-events: none;
+  opacity: 0.6;
+  transition: opacity 0.6s var(--liquid-ease);
 }
 
 .ne-blob.collapsed {
   width: auto;
-  height: 2.5rem;
-  padding: 0 1.1rem;
+  max-width: 28rem;
+  height: 2.6rem;
+  padding: 0 1.2rem;
   border-radius: 999px;
   cursor: pointer;
 }
 
 .ne-blob.expanded {
   width: min(680px, calc(100vw - 3rem));
-  border-radius: 1.5rem;
-  padding: 1rem 1.1rem;
+  max-width: min(680px, calc(100vw - 3rem));
+  border-radius: 22px;
+  padding: 1.05rem 1.15rem;
   border-color: var(--glass-border-strong);
   cursor: default;
   box-shadow:
-    0 10px 50px rgba(0, 0, 0, 0.55),
-    0 0 0 1px rgba(255, 255, 255, 0.04) inset,
-    0 0 80px rgba(0, 243, 255, 0.10);
+    0 18px 70px rgba(0, 0, 0, 0.6),
+    0 0 0 1px rgba(255, 255, 255, 0.05) inset,
+    0 0 100px rgba(0, 243, 255, 0.13),
+    0 1px 0 rgba(255, 255, 255, 0.08) inset;
 }
+
+.ne-blob.expanded::before { opacity: 1; }
 
 /* --- Core (collapsed-state contents) --- */
 
 .ne-blob-core {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  height: 2.5rem;
+  gap: 0.55rem;
+  height: 2.6rem;
   white-space: nowrap;
-  transition: opacity 0.25s ease;
+  transition: opacity 0.28s var(--liquid-ease), height 0.4s var(--liquid-ease);
+  position: relative;
+  z-index: 1;
 }
 
 .ne-blob.expanded .ne-blob-core {
@@ -226,16 +317,23 @@ body {
 .ne-blob-expanded {
   display: flex;
   flex-direction: column;
-  gap: 0.65rem;
+  gap: 0.7rem;
   opacity: 0;
   max-height: 0;
-  transition: opacity 0.25s ease 0.05s, max-height 0.4s ease;
+  transform: translateY(6px);
+  transition:
+    opacity 0.4s var(--liquid-ease) 0.05s,
+    max-height 0.5s var(--liquid-ease),
+    transform 0.5s var(--liquid-ease);
   pointer-events: none;
+  position: relative;
+  z-index: 1;
 }
 
 .ne-blob.expanded .ne-blob-expanded {
   opacity: 1;
   max-height: 720px;
+  transform: translateY(0);
   pointer-events: auto;
 }
 
@@ -359,7 +457,8 @@ body {
 
 .ne-blob-menu {
   position: absolute;
-  top: calc(100% + 6px);
+  /* Open UPWARD because the blob sits near the bottom of the viewport */
+  bottom: calc(100% + 8px);
   left: 0;
   background: var(--glass-bg-strong);
   border: 1px solid var(--glass-border-strong);
@@ -369,9 +468,15 @@ body {
   box-shadow: var(--glass-shadow);
   padding: 0.3rem 0;
   min-width: 220px;
-  max-height: 50vh;
+  max-height: 60vh;
   overflow-y: auto;
-  z-index: 14;
+  z-index: 30;
+  animation: ne-menu-in 0.35s var(--liquid-ease);
+}
+
+@keyframes ne-menu-in {
+  from { opacity: 0; transform: translateY(6px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 .ne-blob-menu-item {
@@ -432,12 +537,15 @@ body {
 
 /* Row 4: search results */
 .ne-blob-results {
-  background: rgba(0, 0, 0, 0.22);
-  border: 1px solid rgba(0, 243, 255, 0.1);
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(0, 243, 255, 0.12);
   border-radius: 10px;
   max-height: 280px;
   overflow-y: auto;
-  margin-top: 0.2rem;
+  /* Search results show ABOVE the filter row since blob is bottom-anchored */
+  margin-bottom: 0.2rem;
+  order: -1;
+  animation: ne-menu-in 0.3s var(--liquid-ease);
 }
 
 .ne-blob-results.empty {
