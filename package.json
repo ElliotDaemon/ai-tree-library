@@ -4,11 +4,13 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "node scripts/fetch-content.mjs && next build",
+    "build": "node scripts/fetch-content.mjs && node scripts/build-llms-txt.mjs && next build",
     "start": "next start",
     "lint": "eslint",
     "fetch-content": "node scripts/fetch-content.mjs",
-    "seed-library": "node scripts/seed-library-from-batches.mjs"
+    "build-llms-txt": "node scripts/build-llms-txt.mjs",
+    "seed-library": "node scripts/seed-library-from-batches.mjs",
+    "enrich": "node scripts/enrich-descriptions.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.32.1",

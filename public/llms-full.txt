@@ -1,0 +1,11 @@
+# AI Tree Library — Full Catalog
+
+> Complete machine-readable catalog of every entry in the AI Tree Library, grouped by category and subcategory. Includes long-form descriptions, rarity tiers, types, pricing, and tags. Designed for LLM ingestion.
+
+Total entries: 0
+Top-level categories: 0
+Last updated: 2026-05-22T16:53:54.955Z
+
+---
+
+Curated by Elliot Daemon (https://elliotdaemon.com)

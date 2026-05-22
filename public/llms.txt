@@ -1,0 +1,16 @@
+# AI Tree Library
+
+> A 3D constellation of curated AI tools, design inspiration, and creative resources. Hand-picked by Elliot Daemon. 0 entries across 0 top-level categories. Each entry has its own page at https://aitreelibrary.com/<slug>.
+
+Live constellation: https://aitreelibrary.com
+Full machine-readable catalog: https://aitreelibrary.com/llms-full.txt
+Sitemap: https://aitreelibrary.com/sitemap.xml
+
+---
+
+This file follows the llmstxt.org convention. The companion 
+https://aitreelibrary.com/llms-full.txt contains every entry with its long description, 
+URL, rarity tier, tags, and category — meant for LLM ingestion.
+
+Curated by Elliot Daemon (https://elliotdaemon.com)
+Last updated: 2026-05-22T16:53:54.955Z
