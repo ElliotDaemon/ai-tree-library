@@ -21,11 +21,12 @@ const josefinSans = Josefin_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "AI Tree Library — A 3D constellation of AI tools, design inspo, and creative resources",
+  title: "AI Tree Library — A 3D constellation of AI tools, design inspo & creative resources",
   description:
     "A hand-curated web library rendered as a navigable 3D constellation. Explore AI tools, design inspiration, and creative resources floating in dark space.",
   metadataBase: new URL("https://aitreelibrary.com"),
   openGraph: {
+    // The opengraph-image is set automatically by Next.js from app/opengraph-image.tsx
     title: "AI Tree Library",
     description: "A 3D constellation of curated AI tools, design inspo, and creative resources.",
     url: "https://aitreelibrary.com",
