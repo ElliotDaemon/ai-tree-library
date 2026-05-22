@@ -151,11 +151,10 @@ for (const sub of categories.filter((c) => !c.isTopLevel)) {
   subsByParent.get(sub.parentName).push(sub);
 }
 
-// Count entries per top-level category — used to compute density-aware wedge widths.
+// Count entries per top-level category — for size/density telemetry only.
 const entriesByCat = new Map();
 for (const e of entries) {
   if (!e.categoryId) continue;
-  // entry.categoryId points at a SUBCATEGORY in our schema; map up to its top-level parent
   const sub = categories.find((c) => c.id === e.categoryId);
   if (!sub) continue;
   const parent = topLevel.find((c) => c.name === sub.parentName);
@@ -163,28 +162,27 @@ for (const e of entries) {
   entriesByCat.set(parent.id, (entriesByCat.get(parent.id) || 0) + 1);
 }
 
-// Wedge assignment: angles fan based on entry density so sparse categories
-// don't claim huge empty arcs and dense ones get breathing room.
+// Wedge assignment — EQUAL widths around the circle.
+// (Earlier sqrt-density weighting caused asymmetric "lean" because V1's biggest
+// categories happened to all sit early in displayOrder, so the wide arcs all
+// clustered on one side of the trunk.)
 const N = Math.max(topLevel.length, 1);
-const totalWeight = topLevel.reduce((acc, c) => acc + Math.sqrt(Math.max(1, entriesByCat.get(c.id) || 0)), 0);
+const WEDGE_FULL = (Math.PI * 2) / N;
+const WEDGE_USABLE = WEDGE_FULL * 0.78; // small gap between wedges
 
-let runningAngle = 0;
 const catMeta = new Map();
 topLevel.forEach((cat, i) => {
-  const count = entriesByCat.get(cat.id) || 0;
-  // square-root scaling — sparse cats still get some space, dense ones aren't oversized
-  const weight = Math.sqrt(Math.max(1, count));
-  const fullSpan = (weight / totalWeight) * Math.PI * 2;
-  const usable = fullSpan * 0.78; // small gap between wedges
-  // Center of the wedge
-  const baseAngle = runningAngle + fullSpan / 2;
-  runningAngle += fullSpan;
-
-  // Stagger heights so categories spiral up the trunk — keeps the tree from
-  // being a flat ring of categories at one altitude.
-  const heightCenter = -15 + ((i + rnd() * 0.5) / N) * 60;
-
-  catMeta.set(cat.id, { baseAngle, angularWidth: usable, heightCenter, entryCount: count });
+  const baseAngle = (i / N) * Math.PI * 2;
+  // Category anchors all sit in the upper canopy with mild jitter
+  // (rather than spiraling root → canopy, which dragged sparse categories
+  // into the trunk region and broke the tree silhouette).
+  const heightCenter = 28 + rndRange(-4, 6);
+  catMeta.set(cat.id, {
+    baseAngle,
+    angularWidth: WEDGE_USABLE,
+    heightCenter,
+    entryCount: entriesByCat.get(cat.id) || 0,
+  });
 });
 
 // Sample a position inside the silhouette, constrained to a wedge.
@@ -233,17 +231,20 @@ topLevel.forEach((cat) => {
   links.push({ source: TRUNK_ID, target: cat.id, kind: "backbone" });
 });
 
-// 2) Subcategory anchors — medium, near their parent in the same wedge.
+// 2) Subcategory anchors — distributed THROUGH the parent's wedge across the
+// full vertical range (5..40), not clumped at canopy. This makes subcats
+// occupy different branch heights within a category, giving each branch
+// internal structure.
 const subPositions = new Map();
 for (const parent of topLevel) {
   const meta = catMeta.get(parent.id);
   const subs = (subsByParent.get(parent.name) || []).sort((a, b) => a.displayOrder - b.displayOrder);
   subs.forEach((sub, j) => {
-    // Subcategory heights vary within ±15 of parent height; angularly tucked in tighter
-    const yOffset = subs.length > 1 ? ((j / (subs.length - 1)) - 0.5) * 14 : rndRange(-4, 4);
-    const y = meta.heightCenter + yOffset + rndRange(-2, 2);
-    const angleSpread = Math.min(meta.angularWidth * 0.55, 0.5);
-    const pos = samplePosition(y, meta.baseAngle, angleSpread, 0.4);
+    // Spread subcategories vertically along the branch, from upper-trunk to canopy
+    const t = subs.length === 1 ? 0.5 : j / (subs.length - 1);
+    const y = 8 + t * 30 + rndRange(-3, 3); // y range ~5..40
+    const angleSpread = meta.angularWidth * 0.55;
+    const pos = samplePosition(y, meta.baseAngle, angleSpread, 0.45);
     subPositions.set(sub.id, { pos, parentId: parent.id });
     const subColor = mixRgb(gradientColor(pos[1]), hexToRgb(parent.color), 0.6);
     nodes.push({
@@ -260,8 +261,10 @@ for (const parent of topLevel) {
   });
 }
 
-// 3) Entries — the leaves. Distribute around their SUBCATEGORY anchor in a
-// "star constellation" pattern (random scatter in a sphere, sized by tier).
+// 3) Entries — the leaves. Distribute across the FULL tree height inside
+// their parent category's wedge. This is what makes the tree silhouette
+// readable: leaves fill the entire roots → trunk → canopy range, not just
+// the area around their subcategory anchor.
 const entriesBySubcat = new Map();
 const entryNodesById = new Map();
 
@@ -273,41 +276,17 @@ for (const entry of entries) {
   const parentMeta = catMeta.get(subInfo.parentId);
   if (!parent || !parentMeta) continue;
 
-  // Tighter scatter for dense subcats; wider for sparse so they don't all overlap
-  const cluster = entriesBySubcat.get(entry.categoryId) || [];
-  const localIdx = cluster.length;
-  const clusterAngularRange = Math.min(parentMeta.angularWidth * 0.85, 0.7);
-
-  // Scatter around the subcategory anchor in a roughly spherical cloud
-  const subPos = subInfo.pos;
-  // Spiral outward as more entries land in the same subcat
-  const spiralR = 4 + Math.sqrt(localIdx) * 1.8;
-  const spiralPhi = localIdx * 2.4 + rndRange(-0.3, 0.3); // golden-angle-ish
-  const spiralTheta = rnd() * Math.PI;
-  const offX = spiralR * Math.cos(spiralPhi) * Math.sin(spiralTheta);
-  const offY = spiralR * Math.cos(spiralTheta) * 0.6;
-  const offZ = spiralR * Math.sin(spiralPhi) * Math.sin(spiralTheta);
-
-  // Constrain inside the parent wedge
-  let candidateAngle = Math.atan2(subPos[2] + offZ, subPos[0] + offX);
-  const wedgeMin = parentMeta.baseAngle - clusterAngularRange / 2;
-  const wedgeMax = parentMeta.baseAngle + clusterAngularRange / 2;
-  candidateAngle = Math.max(wedgeMin, Math.min(wedgeMax, candidateAngle));
-
-  const candidateR = Math.sqrt((subPos[0] + offX) ** 2 + (subPos[2] + offZ) ** 2);
-  const candidateY = subPos[1] + offY + rndRange(-1.5, 1.5);
-  const maxR = treeRadius(candidateY);
-  const finalR = Math.min(candidateR, maxR * 0.92);
-
-  const pos = [
-    finalR * Math.cos(candidateAngle),
-    candidateY,
-    finalR * Math.sin(candidateAngle),
-  ];
+  // Bias entries toward the upper canopy (where the volume is biggest)
+  // but allow them anywhere from deep roots to top of crown.
+  const u = Math.pow(rnd(), 0.7);
+  const y = -50 + u * 115; // -50 .. 65, biased upward
+  const pos = samplePosition(y, parentMeta.baseAngle, parentMeta.angularWidth, 0.55);
 
   const parentRgb = hexToRgb(parent.color);
   const toolColor = mixRgb(gradientColor(pos[1]), parentRgb, 0.5);
   const tier = rarityKey(entry);
+
+  const cluster = entriesBySubcat.get(entry.categoryId) || [];
 
   // Sizing per rarity. Density-adaptive: with very few entries, push larger
   // so the tree still reads visually.
