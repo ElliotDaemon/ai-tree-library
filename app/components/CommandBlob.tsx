@@ -199,6 +199,12 @@ export default function CommandBlob({
     if (query || openMenu || document.activeElement === inputRef.current) return;
     collapseTimer.current = setTimeout(() => setExpanded(false), 600);
   };
+  // Touch devices: hover never fires, so tap toggles. On the collapsed pill,
+  // tapping anywhere on the core expands. The click-outside listener handles
+  // collapsing back when the user taps elsewhere.
+  const handleCoreClick = () => {
+    if (!expanded) setExpanded(true);
+  };
 
   const onInputKey = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Escape") {
@@ -254,8 +260,8 @@ export default function CommandBlob({
       onMouseLeave={handleLeave}
       onFocusCapture={handleEnter}
     >
-      {/* Collapsed-state core: always visible */}
-      <div className="ne-blob-core">
+      {/* Collapsed-state core: always visible. Tap to expand on touch. */}
+      <div className="ne-blob-core" onClick={handleCoreClick} role="button" tabIndex={0}>
         <span className="ne-blob-pulse" />
         <span className="ne-blob-count">
           <span className="ne-blob-num">{stats?.entries ?? 0}</span>
@@ -266,7 +272,7 @@ export default function CommandBlob({
           <span className="ne-blob-num">{stats?.topLevel ?? 0}</span>
           <span className="ne-blob-unit">cats</span>
         </span>
-        <span className="ne-blob-hint">{expanded ? "" : "hover to search & filter  /"}</span>
+        <span className="ne-blob-hint">{expanded ? "" : "tap to search & filter  /"}</span>
       </div>
 
       {/* Expanded state */}
