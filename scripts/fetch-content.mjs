@@ -1,19 +1,14 @@
 // Build-time content fetch.
-// Pulls Library (Status=Ready) + Categories from Notion, builds a
-// PURE-DATA tree layout (no filler particles), and writes /public/library.json.
+// Faithful adaptation of the Neural Arbor (Gemini) tree distribution.
 //
-// Layout invariants:
-//   - Every rendered node is a real entry or category. Zero placeholders.
-//   - The tree silhouette is enforced by treeRadius(y) — works at any density.
-//   - 18 top-level categories each own an angular wedge. Sparse wedges fan out
-//     wider so the tree never looks lopsided.
+// Core insight from the reference: the tree silhouette is created by ~3000
+// background "dust" particles using a Y → radius mapping with density bias.
+// Real data (categories / subcategories / entries) is just BRIGHTER and
+// LARGER points sprinkled into the same distribution. The dust gives volume;
+// the bright points carry the data.
 //
-// Connection logic (3 kinds of lines, each with different visual weight):
-//   1. backbone   — trunk → category → subcategory → entry  (strongest)
-//   2. cluster    — within a subcategory, each entry → its K nearest siblings
-//                   (forms constellation-shaped clusters of stars)
-//   3. tag-bridge — entries sharing 2+ tags, faintest, limited per node
-//                   (creates cross-cluster threads)
+// Result: looks like a tree at any data density, every clickable/hoverable
+// node is a real Notion entry, dust never intercepts clicks.
 
 import { Client } from "@notionhq/client";
 import { writeFile, mkdir } from "node:fs/promises";
@@ -40,12 +35,7 @@ async function fetchAll(dsId, filter) {
   const all = [];
   let cursor;
   do {
-    const res = await notion.databases.query({
-      database_id: dsId,
-      start_cursor: cursor,
-      page_size: 100,
-      filter,
-    });
+    const res = await notion.databases.query({ database_id: dsId, start_cursor: cursor, page_size: 100, filter });
     for (const r of res.results) if ("properties" in r) all.push({ id: r.id, properties: r.properties });
     cursor = res.has_more ? res.next_cursor : undefined;
   } while (cursor);
@@ -94,7 +84,6 @@ const entries = libRows.map((p) => ({
 }));
 console.log(`[fetch-content] Entries: ${entries.length}`);
 
-// Auto-assign rarity (V1 backfill from featured/gem flags)
 function rarityKey(entry) {
   if (entry.rarity) {
     if (entry.rarity.includes("Legendary")) return "legendary";
@@ -108,7 +97,7 @@ function rarityKey(entry) {
   return "established";
 }
 
-// --- Tree silhouette ---
+// ===== Tree silhouette — Gemini reference, unmodified =====
 function treeRadius(y) {
   if (y < -45) return 8 + Math.pow(-45 - y, 1.4) * 1.2;
   if (y < 10) return Math.max(2, 6 - (y + 45) * 0.05);
@@ -118,32 +107,53 @@ function treeRadius(y) {
   return Math.max(0.1, maxR * Math.cos(t));
 }
 
-// Deterministic PRNG (so the tree layout is reproducible across builds)
+// Deterministic PRNG so the tree is reproducible across builds.
 let seedState = 0x9e3779b1;
-function rnd() {
-  seedState = (seedState * 1664525 + 1013904223) >>> 0;
-  return seedState / 0x100000000;
-}
-function rndRange(a, b) { return a + (b - a) * rnd(); }
+function rnd() { seedState = (seedState * 1664525 + 1013904223) >>> 0; return seedState / 0x100000000; }
 
-// Height gradient (purple roots → cyan trunk → pink canopy), blended with category color.
-const COLOR_ROOTS = [0x70 / 255, 0, 1.0];
-const COLOR_TRUNK = [0, 0xf3 / 255, 1.0];
-const COLOR_CANOPY = [1.0, 0, 0xaa / 255];
+// Single point sampler — the heart of the Gemini layout. Used for dust AND
+// for every real node, so dust + real-data points share the exact same
+// distribution and the tree silhouette holds.
+function samplePoint() {
+  const y = rnd() * 140 - 65; // -65 .. 75
+  let r = treeRadius(y);
+  r = r * Math.pow(rnd(), 0.6); // density bias toward central axis
+  const theta = rnd() * Math.PI * 2;
+  const noise = 5;
+  return [
+    r * Math.cos(theta) + (rnd() - 0.5) * noise,
+    y + (rnd() - 0.5) * noise,
+    r * Math.sin(theta) + (rnd() - 0.5) * noise,
+  ];
+}
+
+// Height gradient color — Gemini reference. Purple roots → cyan trunk → pink canopy.
+const COLOR_ROOTS = [0x70 / 255, 0, 1.0];     // #7000ff
+const COLOR_TRUNK = [0, 0xf3 / 255, 1.0];     // #00f3ff
+const COLOR_CANOPY = [1.0, 0, 0xaa / 255];    // #ff00aa
 function gradientColor(y) {
+  let c;
   if (y < -10) {
     const t = clamp((y + 65) / 55, 0, 1);
-    return mixRgb(COLOR_ROOTS, COLOR_TRUNK, t);
+    c = mixRgb(COLOR_ROOTS, COLOR_TRUNK, t);
+  } else {
+    const t = clamp((y + 10) / 85, 0, 1);
+    c = mixRgb(COLOR_TRUNK, COLOR_CANOPY, t);
   }
-  const t = clamp((y + 10) / 85, 0, 1);
-  return mixRgb(COLOR_TRUNK, COLOR_CANOPY, t);
+  // Gemini's HSL jitter — small hue/saturation wiggle so dust feels organic
+  const jitter = (rnd() - 0.5) * 0.12;
+  return [
+    clamp(c[0] + jitter * 0.4, 0, 1),
+    clamp(c[1] + jitter * 0.1, 0, 1),
+    clamp(c[2] + jitter * 0.4, 0, 1),
+  ];
 }
 function mixRgb(a, b, t) { t = clamp(t, 0, 1); return [a[0] * (1 - t) + b[0] * t, a[1] * (1 - t) + b[1] * t, a[2] * (1 - t) + b[2] * t]; }
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 function hexToRgb(hex) { const h = hex.replace("#", ""); return [parseInt(h.slice(0, 2), 16) / 255, parseInt(h.slice(2, 4), 16) / 255, parseInt(h.slice(4, 6), 16) / 255]; }
 function boost(rgb, f) { return [Math.min(1, rgb[0] * f), Math.min(1, rgb[1] * f), Math.min(1, rgb[2] * f)]; }
 
-// --- Build the dataset ---
+// ===== Build the dataset =====
 const topLevel = categories.filter((c) => c.isTopLevel).sort((a, b) => a.displayOrder - b.displayOrder);
 const subsByParent = new Map();
 for (const sub of categories.filter((c) => !c.isTopLevel)) {
@@ -151,159 +161,84 @@ for (const sub of categories.filter((c) => !c.isTopLevel)) {
   subsByParent.get(sub.parentName).push(sub);
 }
 
-// Count entries per top-level category — for size/density telemetry only.
-const entriesByCat = new Map();
-for (const e of entries) {
-  if (!e.categoryId) continue;
-  const sub = categories.find((c) => c.id === e.categoryId);
-  if (!sub) continue;
-  const parent = topLevel.find((c) => c.name === sub.parentName);
-  if (!parent) continue;
-  entriesByCat.set(parent.id, (entriesByCat.get(parent.id) || 0) + 1);
-}
-
-// Wedge assignment — EQUAL widths around the circle.
-// (Earlier sqrt-density weighting caused asymmetric "lean" because V1's biggest
-// categories happened to all sit early in displayOrder, so the wide arcs all
-// clustered on one side of the trunk.)
-const N = Math.max(topLevel.length, 1);
-const WEDGE_FULL = (Math.PI * 2) / N;
-const WEDGE_USABLE = WEDGE_FULL * 0.78; // small gap between wedges
-
-const catMeta = new Map();
-topLevel.forEach((cat, i) => {
-  const baseAngle = (i / N) * Math.PI * 2;
-  // Category anchors all sit in the upper canopy with mild jitter
-  // (rather than spiraling root → canopy, which dragged sparse categories
-  // into the trunk region and broke the tree silhouette).
-  const heightCenter = 28 + rndRange(-4, 6);
-  catMeta.set(cat.id, {
-    baseAngle,
-    angularWidth: WEDGE_USABLE,
-    heightCenter,
-    entryCount: entriesByCat.get(cat.id) || 0,
-  });
-});
-
-// Sample a position inside the silhouette, constrained to a wedge.
-function samplePosition(yHint, baseAngle, angularWidth, density = 0.55) {
-  const y = yHint + rndRange(-3, 3);
-  const maxR = treeRadius(y);
-  const r = maxR * Math.pow(rnd(), density);
-  const theta = baseAngle + (rnd() - 0.5) * angularWidth;
-  return [
-    r * Math.cos(theta) + rndRange(-1.5, 1.5),
-    y + rndRange(-1.5, 1.5),
-    r * Math.sin(theta) + rndRange(-1.5, 1.5),
-  ];
-}
-
 const nodes = [];
 const links = [];
 
-// Trunk anchor — invisible-ish at base; structural root of all backbone links.
+// Logical trunk root (invisible, anchor for backbone links).
 const TRUNK_ID = "__trunk__";
-nodes.push({
-  id: TRUNK_ID,
-  kind: "trunk",
-  name: "AI Tree Library",
-  color: [1, 1, 1],
-  position: [0, -45, 0],
-  size: 4,
-});
+nodes.push({ id: TRUNK_ID, kind: "trunk", name: "AI Tree Library", color: [1, 1, 1], position: [0, -45, 0], size: 4 });
 
-// 1) Category anchors — large, bright; sit in upper canopy at varying heights.
-topLevel.forEach((cat) => {
-  const meta = catMeta.get(cat.id);
-  const y = meta.heightCenter + rndRange(-2, 4);
-  const pos = samplePosition(y, meta.baseAngle, meta.angularWidth * 0.18, 0.25);
-  const catColor = mixRgb(gradientColor(pos[1]), hexToRgb(cat.color), 0.65);
-  nodes.push({
+// 1) Categories — bright, large, randomly placed via samplePoint().
+// Color: category color blended with the height gradient at that point.
+const catNodeByDataId = new Map();
+for (const cat of topLevel) {
+  const pos = samplePoint();
+  const baseColor = mixRgb(gradientColor(pos[1]), hexToRgb(cat.color), 0.6);
+  const node = {
     id: cat.id,
     kind: "category",
     name: cat.name,
-    color: boost(catColor, 1.55),
+    color: boost(baseColor, 1.55),
     rawColor: cat.color,
     position: pos,
-    size: 7,
-    angle: meta.baseAngle,
-  });
+    size: 6.5,
+  };
+  nodes.push(node);
+  catNodeByDataId.set(cat.id, node);
   links.push({ source: TRUNK_ID, target: cat.id, kind: "backbone" });
-});
+}
 
-// 2) Subcategory anchors — distributed THROUGH the parent's wedge across the
-// full vertical range (5..40), not clumped at canopy. This makes subcats
-// occupy different branch heights within a category, giving each branch
-// internal structure.
-const subPositions = new Map();
+// 2) Subcategories — medium-bright, also randomly placed.
+const subNodeByDataId = new Map();
 for (const parent of topLevel) {
-  const meta = catMeta.get(parent.id);
   const subs = (subsByParent.get(parent.name) || []).sort((a, b) => a.displayOrder - b.displayOrder);
-  subs.forEach((sub, j) => {
-    // Spread subcategories vertically along the branch, from upper-trunk to canopy
-    const t = subs.length === 1 ? 0.5 : j / (subs.length - 1);
-    const y = 8 + t * 30 + rndRange(-3, 3); // y range ~5..40
-    const angleSpread = meta.angularWidth * 0.55;
-    const pos = samplePosition(y, meta.baseAngle, angleSpread, 0.45);
-    subPositions.set(sub.id, { pos, parentId: parent.id });
-    const subColor = mixRgb(gradientColor(pos[1]), hexToRgb(parent.color), 0.6);
-    nodes.push({
+  for (const sub of subs) {
+    const pos = samplePoint();
+    const baseColor = mixRgb(gradientColor(pos[1]), hexToRgb(parent.color), 0.55);
+    const node = {
       id: sub.id,
       kind: "subcategory",
       name: sub.name,
-      color: boost(subColor, 1.4),
+      color: boost(baseColor, 1.4),
       rawColor: parent.color,
       position: pos,
       size: 4.5,
       parentId: parent.id,
-    });
+    };
+    nodes.push(node);
+    subNodeByDataId.set(sub.id, node);
     links.push({ source: parent.id, target: sub.id, kind: "backbone" });
-  });
+  }
 }
 
-// 3) Entries — the leaves. Distribute across the FULL tree height inside
-// their parent category's wedge. This is what makes the tree silhouette
-// readable: leaves fill the entire roots → trunk → canopy range, not just
-// the area around their subcategory anchor.
+// 3) Entries — bright stars (tier-sized) sprinkled into the same distribution.
 const entriesBySubcat = new Map();
-const entryNodesById = new Map();
-
+const entryNodeByDataId = new Map();
 for (const entry of entries) {
   if (!entry.categoryId) continue;
-  const subInfo = subPositions.get(entry.categoryId);
-  if (!subInfo) continue;
-  const parent = topLevel.find((c) => c.id === subInfo.parentId);
-  const parentMeta = catMeta.get(subInfo.parentId);
-  if (!parent || !parentMeta) continue;
+  const sub = categories.find((c) => c.id === entry.categoryId);
+  if (!sub) continue;
+  const parent = topLevel.find((c) => c.name === sub.parentName);
 
-  // Bias entries toward the upper canopy (where the volume is biggest)
-  // but allow them anywhere from deep roots to top of crown.
-  const u = Math.pow(rnd(), 0.7);
-  const y = -50 + u * 115; // -50 .. 65, biased upward
-  const pos = samplePosition(y, parentMeta.baseAngle, parentMeta.angularWidth, 0.55);
-
-  const parentRgb = hexToRgb(parent.color);
-  const toolColor = mixRgb(gradientColor(pos[1]), parentRgb, 0.5);
+  const pos = samplePoint();
+  const parentRgb = parent ? hexToRgb(parent.color) : [0.6, 0.6, 0.6];
+  const baseColor = mixRgb(gradientColor(pos[1]), parentRgb, 0.45);
   const tier = rarityKey(entry);
 
-  const cluster = entriesBySubcat.get(entry.categoryId) || [];
-
-  // Sizing per rarity. Density-adaptive: with very few entries, push larger
-  // so the tree still reads visually.
+  // Sizing per rarity. Slight density-adaptive bump when total entries are
+  // low so the tree still has visible bright stars.
   const baseSizeByTier = { legendary: 5.5, established: 3.6, rare: 3.0, gem: 2.4 };
   const densityScale = entries.length < 80 ? 1.25 : entries.length < 250 ? 1.1 : 1.0;
-  const size = baseSizeByTier[tier] * densityScale;
-
   const boostByTier = { legendary: 1.8, established: 1.35, rare: 1.25, gem: 1.4 };
 
   const node = {
     id: entry.id,
     kind: "entry",
     name: entry.name,
-    color: boost(toolColor, boostByTier[tier]),
-    rawColor: parent.color,
+    color: boost(baseColor, boostByTier[tier]),
+    rawColor: parent ? parent.color : "#888",
     position: pos,
-    size,
+    size: baseSizeByTier[tier] * densityScale,
     featured: entry.featured,
     gem: entry.gem,
     rarity: tier,
@@ -311,20 +246,39 @@ for (const entry of entries) {
     tags: entry.tags,
   };
   nodes.push(node);
-  entryNodesById.set(entry.id, node);
+  entryNodeByDataId.set(entry.id, node);
+
+  const cluster = entriesBySubcat.get(entry.categoryId) || [];
   cluster.push(node);
   entriesBySubcat.set(entry.categoryId, cluster);
   links.push({ source: entry.categoryId, target: entry.id, kind: "backbone" });
 }
 
-// 4) Constellation lines — within each subcategory, connect each entry to its
-// K=2 nearest siblings. Forms small star-constellations inside clusters.
+// 4) Dust particles — the tree's body. Pure visual mass, no data, no clicks.
+// Target total ~3500 particles like Gemini; dust fills whatever real-node count
+// leaves room for.
+const realCount = nodes.length - 1; // minus trunk
+const DUST_COUNT = Math.max(2500, 3500 - realCount);
+for (let i = 0; i < DUST_COUNT; i++) {
+  const pos = samplePoint();
+  const color = gradientColor(pos[1]);
+  nodes.push({
+    id: `__dust_${i}__`,
+    kind: "filler",
+    color,
+    position: pos,
+    size: rnd() * 1.5 + 0.8, // Gemini's small dust size range
+  });
+}
+
+// 5) Cluster lines — within each subcategory, K=2 nearest siblings form
+// a small star constellation. This is the "sophisticated logic" the user
+// asked for (meaningful, not random proximity).
 for (const cluster of entriesBySubcat.values()) {
   if (cluster.length < 2) continue;
   const K = 2;
   for (let i = 0; i < cluster.length; i++) {
     const a = cluster[i];
-    // Compute distances to all siblings
     const dists = [];
     for (let j = 0; j < cluster.length; j++) {
       if (i === j) continue;
@@ -337,41 +291,38 @@ for (const cluster of entriesBySubcat.values()) {
     dists.sort((x, y) => x.d2 - y.d2);
     for (let k = 0; k < Math.min(K, dists.length); k++) {
       const b = cluster[dists[k].idx];
-      // Avoid double-edges (only add if a.id < b.id lex)
-      if (a.id < b.id) {
-        links.push({ source: a.id, target: b.id, kind: "cluster" });
-      }
+      if (a.id < b.id) links.push({ source: a.id, target: b.id, kind: "cluster" });
     }
   }
 }
 
-// 5) Tag bridges — entries sharing 2+ tags get a faint cross-cluster line.
-//   Capped per node to keep the visual sparse.
-const TAG_BRIDGE_MAX = 1; // at most one tag-bridge edge per node
+// 6) Tag bridges — entries sharing 2+ tags, cross-subcategory. Faint
+// cross-cluster threads. Capped per node.
+const TAG_BRIDGE_MAX = 1;
 const tagBridgeCount = new Map();
-const entryList = nodes.filter((n) => n.kind === "entry");
+const entryList = [...entryNodeByDataId.values()];
 for (let i = 0; i < entryList.length; i++) {
   const a = entryList[i];
   if ((tagBridgeCount.get(a.id) ?? 0) >= TAG_BRIDGE_MAX) continue;
   if (!a.tags || a.tags.length < 2) continue;
   for (let j = i + 1; j < entryList.length; j++) {
     const b = entryList[j];
-    if (a.parentId === b.parentId) continue; // skip same-subcat (already cluster-linked)
+    if (a.parentId === b.parentId) continue;
     if ((tagBridgeCount.get(b.id) ?? 0) >= TAG_BRIDGE_MAX) continue;
     if (!b.tags || b.tags.length < 2) continue;
-    let shared = 0;
     const sA = new Set(a.tags);
+    let shared = 0;
     for (const t of b.tags) if (sA.has(t)) shared++;
     if (shared >= 2) {
       links.push({ source: a.id, target: b.id, kind: "tag-bridge" });
       tagBridgeCount.set(a.id, (tagBridgeCount.get(a.id) ?? 0) + 1);
       tagBridgeCount.set(b.id, (tagBridgeCount.get(b.id) ?? 0) + 1);
-      break; // one bridge per outer-loop node is enough
+      break;
     }
   }
 }
 
-console.log(`[fetch-content] Nodes: ${nodes.length}`);
+console.log(`[fetch-content] Nodes: ${nodes.length} (real: ${realCount}, dust: ${DUST_COUNT})`);
 const linkKinds = links.reduce((m, l) => { m[l.kind] = (m[l.kind] || 0) + 1; return m; }, {});
 console.log(`[fetch-content] Links: ${links.length} (${Object.entries(linkKinds).map(([k, n]) => `${k}=${n}`).join(", ")})`);
 
