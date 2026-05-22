@@ -46,6 +46,7 @@ interface Props {
   onHighlight: (ids: Set<string> | null) => void;
   onDive: (id: string) => void;
   onListOpen: () => void;
+  onSubmitOpen: () => void;
   flightMode: boolean;
   onToggleFlight: () => void;
   filter: FilterState;
@@ -80,6 +81,7 @@ export default function CommandBlob({
   onHighlight,
   onDive,
   onListOpen,
+  onSubmitOpen,
   flightMode,
   onToggleFlight,
   filter,
@@ -379,6 +381,16 @@ export default function CommandBlob({
           {activeFilterLabel ? (
             <span className="ne-blob-active-label">{activeFilterLabel}</span>
           ) : null}
+
+          <button
+            type="button"
+            className="ne-blob-submit-btn"
+            onClick={onSubmitOpen}
+            tabIndex={expanded ? 0 : -1}
+            title="Submit a new tool"
+          >
+            + Submit a tool
+          </button>
         </div>
 
         {/* Row 3: Stat strip */}

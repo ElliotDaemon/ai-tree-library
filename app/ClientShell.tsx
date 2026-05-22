@@ -9,6 +9,7 @@ import HeroOverlay from "./components/HeroOverlay";
 import HoverTooltip from "./components/HoverTooltip";
 import CommandBlob from "./components/CommandBlob";
 import CreditBadge from "./components/CreditBadge";
+import SubmitPanel from "./components/SubmitPanel";
 import type { FilterState } from "./components/FilterBar";
 import ListPopup from "./components/ListPopup";
 import type { LayoutNode } from "./scene/Constellation";
@@ -62,6 +63,7 @@ export default function ClientShell({ library }: Props) {
   const [highlightIds, setHighlightIds] = useState<Set<string> | null>(null);
   const [filter, setFilter] = useState<FilterState>({ kind: "none" });
   const [listOpen, setListOpen] = useState(false);
+  const [submitOpen, setSubmitOpen] = useState(false);
   const [diveTargetId, setDiveTargetId] = useState<string | null>(null);
 
   const categoryNameById = useMemo(() => {
@@ -186,6 +188,7 @@ export default function ClientShell({ library }: Props) {
           onHighlight={setHighlightIds}
           onDive={(id) => handleDive(id, "search")}
           onListOpen={handleListOpen}
+          onSubmitOpen={() => setSubmitOpen(true)}
           flightMode={flightMode}
           onToggleFlight={handleToggleFlight}
           filter={filter}
@@ -206,6 +209,8 @@ export default function ClientShell({ library }: Props) {
           onDive={(id) => handleDive(id, "list")}
         />
       ) : null}
+
+      <SubmitPanel open={submitOpen} onClose={() => setSubmitOpen(false)} />
     </>
   );
 }
