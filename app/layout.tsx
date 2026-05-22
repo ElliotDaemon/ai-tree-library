@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Josefin_Sans } from "next/font/google";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -9,6 +9,14 @@ const geistSans = Geist({
 
 const geistMono = Geist_Mono({
   variable: "--font-geist-mono",
+  subsets: ["latin"],
+});
+
+// Josefin Sans = the wordmark font on elliotdaemon.com — geometric thin
+// sans with triangular A and perfect-circle O. Used for the credit mark.
+const josefinSans = Josefin_Sans({
+  variable: "--font-wordmark",
+  weight: ["300"],
   subsets: ["latin"],
 });
 
@@ -37,7 +45,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
+    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} ${josefinSans.variable}`}>
       <body>{children}</body>
     </html>
   );

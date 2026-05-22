@@ -8,6 +8,7 @@ import { useCallback, useMemo, useState } from "react";
 import HeroOverlay from "./components/HeroOverlay";
 import HoverTooltip from "./components/HoverTooltip";
 import CommandBlob from "./components/CommandBlob";
+import CreditBadge from "./components/CreditBadge";
 import type { FilterState } from "./components/FilterBar";
 import ListPopup from "./components/ListPopup";
 import type { LayoutNode } from "./scene/Constellation";
@@ -152,6 +153,8 @@ export default function ClientShell({ library }: Props) {
       ) : null}
 
       <HoverTooltip hoveredNode={hoveredNode} categoryNameById={categoryNameById} />
+
+      <CreditBadge visible={uiVisible} />
 
       {library ? (
         <ListPopup

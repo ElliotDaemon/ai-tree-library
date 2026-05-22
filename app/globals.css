@@ -1098,6 +1098,94 @@ body {
 }
 
 /* ============================================================
+   Credit badge (bottom-right) — chrome-shine wordmark linking to
+   elliotdaemon.com. Uses Josefin Sans for visual parity with the
+   real ELLIOT DAEMON® brand mark.
+   ============================================================ */
+
+.ne-credit {
+  position: fixed;
+  bottom: 1.4rem;
+  right: 1.6rem;
+  z-index: 12;
+  display: flex;
+  align-items: baseline;
+  gap: 0.55rem;
+  text-decoration: none;
+  pointer-events: auto;
+  cursor: pointer;
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+
+.ne-credit.ne-hidden { opacity: 0; transform: translateY(14px); pointer-events: none; }
+
+.ne-credit-label {
+  font-size: 0.58rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(150, 170, 200, 0.45);
+  font-weight: 400;
+  transition: color 0.25s ease;
+}
+
+.ne-credit-mark {
+  font-family: var(--font-wordmark), "Josefin Sans", "Trebuchet MS", sans-serif;
+  font-weight: 300;
+  font-size: 0.92rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  /* Chrome shine: layered gradient that travels across the text */
+  background:
+    linear-gradient(
+      105deg,
+      rgba(220, 232, 248, 0.88) 0%,
+      rgba(220, 232, 248, 0.88) 38%,
+      rgba(255, 255, 255, 1) 47%,
+      rgba(200, 232, 255, 1) 50%,
+      rgba(255, 255, 255, 1) 53%,
+      rgba(220, 232, 248, 0.88) 62%,
+      rgba(220, 232, 248, 0.88) 100%
+    );
+  background-size: 250% 100%;
+  background-position: 100% 0;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: 0 0 22px rgba(0, 243, 255, 0.06);
+  /* Long cycle, sweep is brief — feels like a glint rather than a constant shimmer */
+  animation: ne-chrome-shine 7s ease-in-out infinite;
+  transition: filter 0.3s ease, letter-spacing 0.3s ease;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.25em;
+}
+
+.ne-credit-r {
+  font-size: 0.5em;
+  vertical-align: super;
+  letter-spacing: 0;
+  margin-left: 0.05em;
+  opacity: 0.7;
+}
+
+.ne-credit:hover .ne-credit-mark {
+  filter: drop-shadow(0 0 12px rgba(0, 243, 255, 0.35));
+  letter-spacing: 0.24em;
+}
+
+.ne-credit:hover .ne-credit-label {
+  color: rgba(220, 232, 248, 0.85);
+}
+
+@keyframes ne-chrome-shine {
+  /* The shine sweeps quickly through the middle of the cycle, then rests at the
+     edge for the remainder — feels like a single glint every few seconds. */
+  0%, 35% { background-position: 100% 0; }
+  60%     { background-position: 0% 0; }
+  100%    { background-position: -100% 0; }
+}
+
+/* ============================================================
    Keyframes
    ============================================================ */
 
