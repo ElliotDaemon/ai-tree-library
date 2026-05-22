@@ -129,32 +129,27 @@ export default function Constellation({
     return { positions: p, colors: c, sizes: s, alphas: a };
   }, [nodes, visibleIds, highlightIds, filterActive, highlightActive]);
 
-  // --- Lines: split by kind so each gets its own material/opacity ---
+  // --- Lines: one combined mesh, Gemini-style. The "plexus" links carry
+  // the dense web between all particles. Backbone is rendered on top with
+  // slightly higher opacity so hierarchy still reads. ---
   const lineSets = useMemo(() => {
-    const sets: Record<string, { pos: number[]; col: number[] }> = {
-      backbone: { pos: [], col: [] },
-      cluster: { pos: [], col: [] },
-      "tag-bridge": { pos: [], col: [] },
-      proximity: { pos: [], col: [] }, // legacy
-    };
+    const plexus: { pos: number[]; col: number[] } = { pos: [], col: [] };
+    const backbone: { pos: number[]; col: number[] } = { pos: [], col: [] };
     for (const link of links) {
       const a = nodeById.get(link.source);
       const b = nodeById.get(link.target);
       if (!a || !b) continue;
-      if (a.kind === "trunk" || b.kind === "trunk") continue; // skip invisible trunk
-      // Filter: both endpoints must be visible
+      if (a.kind === "trunk" || b.kind === "trunk") continue;
       if (filterActive) {
         if (!visibleIds!.has(a.id) || !visibleIds!.has(b.id)) continue;
       }
-      const kind = sets[link.kind] ? link.kind : "proximity";
-      sets[kind].pos.push(a.position[0], a.position[1], a.position[2], b.position[0], b.position[1], b.position[2]);
-      sets[kind].col.push(a.color[0], a.color[1], a.color[2], b.color[0], b.color[1], b.color[2]);
+      const target = link.kind === "backbone" ? backbone : plexus;
+      target.pos.push(a.position[0], a.position[1], a.position[2], b.position[0], b.position[1], b.position[2]);
+      target.col.push(a.color[0], a.color[1], a.color[2], b.color[0], b.color[1], b.color[2]);
     }
     return {
-      backbone: { pos: new Float32Array(sets.backbone.pos), col: new Float32Array(sets.backbone.col) },
-      cluster: { pos: new Float32Array(sets.cluster.pos), col: new Float32Array(sets.cluster.col) },
-      bridge: { pos: new Float32Array(sets["tag-bridge"].pos), col: new Float32Array(sets["tag-bridge"].col) },
-      proximity: { pos: new Float32Array(sets.proximity.pos), col: new Float32Array(sets.proximity.col) },
+      plexus: { pos: new Float32Array(plexus.pos), col: new Float32Array(plexus.col) },
+      backbone: { pos: new Float32Array(backbone.pos), col: new Float32Array(backbone.col) },
     };
   }, [links, nodeById, visibleIds, filterActive]);
 
@@ -221,36 +216,25 @@ export default function Constellation({
 
   return (
     <group ref={treeGroupRef}>
-      {/* Backbone — strongest */}
+      {/* Plexus web — all-particle proximity lines, the soul of the Neural Arbor look */}
+      {lineSets.plexus.pos.length > 0 ? (
+        <lineSegments>
+          <bufferGeometry>
+            <bufferAttribute attach="attributes-position" args={[lineSets.plexus.pos, 3]} />
+            <bufferAttribute attach="attributes-color" args={[lineSets.plexus.col, 3]} />
+          </bufferGeometry>
+          <lineBasicMaterial vertexColors transparent opacity={0.15} blending={THREE.AdditiveBlending} depthWrite={false} />
+        </lineSegments>
+      ) : null}
+
+      {/* Structural backbone — rendered on top with slightly higher opacity */}
       {lineSets.backbone.pos.length > 0 ? (
         <lineSegments>
           <bufferGeometry>
             <bufferAttribute attach="attributes-position" args={[lineSets.backbone.pos, 3]} />
             <bufferAttribute attach="attributes-color" args={[lineSets.backbone.col, 3]} />
           </bufferGeometry>
-          <lineBasicMaterial vertexColors transparent opacity={0.32} blending={THREE.AdditiveBlending} depthWrite={false} />
-        </lineSegments>
-      ) : null}
-
-      {/* Cluster constellations — medium */}
-      {lineSets.cluster.pos.length > 0 ? (
-        <lineSegments>
-          <bufferGeometry>
-            <bufferAttribute attach="attributes-position" args={[lineSets.cluster.pos, 3]} />
-            <bufferAttribute attach="attributes-color" args={[lineSets.cluster.col, 3]} />
-          </bufferGeometry>
-          <lineBasicMaterial vertexColors transparent opacity={0.16} blending={THREE.AdditiveBlending} depthWrite={false} />
-        </lineSegments>
-      ) : null}
-
-      {/* Tag bridges — faintest */}
-      {lineSets.bridge.pos.length > 0 ? (
-        <lineSegments>
-          <bufferGeometry>
-            <bufferAttribute attach="attributes-position" args={[lineSets.bridge.pos, 3]} />
-            <bufferAttribute attach="attributes-color" args={[lineSets.bridge.col, 3]} />
-          </bufferGeometry>
-          <lineBasicMaterial vertexColors transparent opacity={0.07} blending={THREE.AdditiveBlending} depthWrite={false} />
+          <lineBasicMaterial vertexColors transparent opacity={0.28} blending={THREE.AdditiveBlending} depthWrite={false} />
         </lineSegments>
       ) : null}
 
@@ -274,8 +258,9 @@ export default function Constellation({
         />
       </points>
 
-      {/* Rarity decorations */}
-      <RarityDecorations nodes={nodeByIndex} visibleIds={visibleIds} />
+      {/* Rarity decorations (crowns / sparkles) intentionally removed — they
+          added visual clutter on top of an already dense scene. Size + brightness
+          already differentiate the tiers. */}
 
       {/* Hover ring */}
       {hoveredId && hoveredId !== divedNodeId ? (

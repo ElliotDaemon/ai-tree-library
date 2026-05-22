@@ -227,9 +227,12 @@ for (const entry of entries) {
 
   // Sizing per rarity. Slight density-adaptive bump when total entries are
   // low so the tree still has visible bright stars.
+  // Brightness boost intentionally low — Gemini uses ~1.5x on all prominent
+  // particles. Higher boosts make real nodes feel "stuck on top of" the dust
+  // instead of being part of the same field.
   const baseSizeByTier = { legendary: 5.5, established: 3.6, rare: 3.0, gem: 2.4 };
   const densityScale = entries.length < 80 ? 1.25 : entries.length < 250 ? 1.1 : 1.0;
-  const boostByTier = { legendary: 1.8, established: 1.35, rare: 1.25, gem: 1.4 };
+  const boostByTier = { legendary: 1.5, established: 1.3, rare: 1.25, gem: 1.35 };
 
   const node = {
     id: entry.id,
@@ -271,53 +274,29 @@ for (let i = 0; i < DUST_COUNT; i++) {
   });
 }
 
-// 5) Cluster lines — within each subcategory, K=2 nearest siblings form
-// a small star constellation. This is the "sophisticated logic" the user
-// asked for (meaningful, not random proximity).
-for (const cluster of entriesBySubcat.values()) {
-  if (cluster.length < 2) continue;
-  const K = 2;
-  for (let i = 0; i < cluster.length; i++) {
-    const a = cluster[i];
-    const dists = [];
-    for (let j = 0; j < cluster.length; j++) {
-      if (i === j) continue;
-      const b = cluster[j];
-      const dx = a.position[0] - b.position[0];
-      const dy = a.position[1] - b.position[1];
-      const dz = a.position[2] - b.position[2];
-      dists.push({ idx: j, d2: dx * dx + dy * dy + dz * dz });
-    }
-    dists.sort((x, y) => x.d2 - y.d2);
-    for (let k = 0; k < Math.min(K, dists.length); k++) {
-      const b = cluster[dists[k].idx];
-      if (a.id < b.id) links.push({ source: a.id, target: b.id, kind: "cluster" });
-    }
-  }
-}
-
-// 6) Tag bridges — entries sharing 2+ tags, cross-subcategory. Faint
-// cross-cluster threads. Capped per node.
-const TAG_BRIDGE_MAX = 1;
-const tagBridgeCount = new Map();
-const entryList = [...entryNodeByDataId.values()];
-for (let i = 0; i < entryList.length; i++) {
-  const a = entryList[i];
-  if ((tagBridgeCount.get(a.id) ?? 0) >= TAG_BRIDGE_MAX) continue;
-  if (!a.tags || a.tags.length < 2) continue;
-  for (let j = i + 1; j < entryList.length; j++) {
-    const b = entryList[j];
-    if (a.parentId === b.parentId) continue;
-    if ((tagBridgeCount.get(b.id) ?? 0) >= TAG_BRIDGE_MAX) continue;
-    if (!b.tags || b.tags.length < 2) continue;
-    const sA = new Set(a.tags);
-    let shared = 0;
-    for (const t of b.tags) if (sA.has(t)) shared++;
-    if (shared >= 2) {
-      links.push({ source: a.id, target: b.id, kind: "tag-bridge" });
-      tagBridgeCount.set(a.id, (tagBridgeCount.get(a.id) ?? 0) + 1);
-      tagBridgeCount.set(b.id, (tagBridgeCount.get(b.id) ?? 0) + 1);
-      break;
+// 5) PLEXUS WEB — proximity lines between ALL particles (including dust).
+// This is THE key visual element from Gemini. Without it, dust is just
+// floating dots; with it, the tree becomes a glowing interconnected web.
+// O(n²) is ~12M pair checks for 3500 particles — fine at build time.
+const MAX_CONN = 4;
+const MAX_DIST_SQ = 9 * 9;
+const connCount = new Array(nodes.length).fill(0);
+// Skip trunk (anchor only, position is far below)
+for (let i = 1; i < nodes.length; i++) {
+  if (connCount[i] >= MAX_CONN) continue;
+  for (let j = i + 1; j < nodes.length; j++) {
+    if (connCount[i] >= MAX_CONN) break;
+    if (connCount[j] >= MAX_CONN) continue;
+    const a = nodes[i].position;
+    const b = nodes[j].position;
+    const dx = a[0] - b[0];
+    const dy = a[1] - b[1];
+    const dz = a[2] - b[2];
+    const d2 = dx * dx + dy * dy + dz * dz;
+    if (d2 < MAX_DIST_SQ) {
+      links.push({ source: nodes[i].id, target: nodes[j].id, kind: "plexus" });
+      connCount[i]++;
+      connCount[j]++;
     }
   }
 }
