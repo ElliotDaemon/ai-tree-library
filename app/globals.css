@@ -1283,8 +1283,8 @@ body {
   .ne-stats-row + .ne-stats-row { display: none; }
   .ne-stats-row:first-child { margin-bottom: 0; }
 
-  .ne-credit-label { display: none; }
-  .ne-credit-mark { font-size: 0.66rem; letter-spacing: 0.16em; }
+  .ne-credit-label { font-size: 0.46rem; letter-spacing: 0.12em; }
+  .ne-credit-mark { font-size: 0.62rem; letter-spacing: 0.14em; }
 
   .ne-blob { bottom: 3.6rem; }
   .ne-blob-filters { gap: 0.3rem; }
