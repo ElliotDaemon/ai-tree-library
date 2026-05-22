@@ -1,6 +1,5 @@
-// Client-side root that owns scene state + search/filter/list-popup state,
-// and dynamic-imports the R3F scene (Next.js 16 requires ssr:false inside a
-// client boundary).
+// Client-side root that owns scene state + search/filter/list state.
+// Single CommandBlob carries all controls; dynamic-imports the R3F scene.
 
 "use client";
 
@@ -8,8 +7,8 @@ import dynamic from "next/dynamic";
 import { useCallback, useMemo, useState } from "react";
 import HeroOverlay from "./components/HeroOverlay";
 import HoverTooltip from "./components/HoverTooltip";
-import SearchBar from "./components/SearchBar";
-import FilterBar, { type FilterState } from "./components/FilterBar";
+import CommandBlob from "./components/CommandBlob";
+import type { FilterState } from "./components/FilterBar";
 import ListPopup from "./components/ListPopup";
 import type { LayoutNode } from "./scene/Constellation";
 
@@ -52,9 +51,7 @@ interface LibraryFile {
   layout: { nodes: LayoutNode[]; links: Array<{ source: string; target: string; kind: string }> };
 }
 
-interface Props {
-  library: LibraryFile | null;
-}
+interface Props { library: LibraryFile | null; }
 
 export default function ClientShell({ library }: Props) {
   const [flightMode, setFlightMode] = useState(false);
@@ -71,57 +68,36 @@ export default function ClientShell({ library }: Props) {
     return m;
   }, [library]);
 
-  // Compute the active filter's "visible IDs" set (or null = show all).
-  // For category filter: includes the top-level cat itself, all its subcats,
-  //   and all entries whose categoryId is one of those subcats.
   const visibleIds = useMemo<Set<string> | null>(() => {
     if (!library) return null;
     if (filter.kind === "none") return null;
-
     const visible = new Set<string>();
     if (filter.kind === "category") {
-      const topId = filter.topLevelId;
-      const top = library.categories.find((c) => c.id === topId);
+      const top = library.categories.find((c) => c.id === filter.topLevelId);
       if (!top) return null;
-      visible.add(topId);
+      visible.add(top.id);
       const subIds = new Set<string>();
       for (const c of library.categories) {
-        if (!c.isTopLevel && c.parentName === top.name) {
-          visible.add(c.id);
-          subIds.add(c.id);
-        }
+        if (!c.isTopLevel && c.parentName === top.name) { visible.add(c.id); subIds.add(c.id); }
       }
-      for (const e of library.entries) {
-        if (e.categoryId && subIds.has(e.categoryId)) visible.add(e.id);
-      }
+      for (const e of library.entries) if (e.categoryId && subIds.has(e.categoryId)) visible.add(e.id);
     } else if (filter.kind === "rarity") {
-      // Entries with this rarity tier (computed in layout)
-      for (const n of library.layout.nodes) {
-        if (n.kind === "entry" && n.rarity === filter.rarity) visible.add(n.id);
-      }
-      // Also include their parent categories so the spine is preserved
-      const entryParents = new Set<string>();
-      for (const e of library.entries) {
-        if (visible.has(e.id) && e.categoryId) entryParents.add(e.categoryId);
-      }
+      for (const n of library.layout.nodes) if (n.kind === "entry" && n.rarity === filter.rarity) visible.add(n.id);
+      const parents = new Set<string>();
+      for (const e of library.entries) if (visible.has(e.id) && e.categoryId) parents.add(e.categoryId);
       for (const c of library.categories) {
-        if (entryParents.has(c.id)) {
+        if (parents.has(c.id)) {
           visible.add(c.id);
           if (!c.isTopLevel) {
-            // Also add top-level parent
             const top = library.categories.find((tc) => tc.isTopLevel && tc.name === c.parentName);
             if (top) visible.add(top.id);
           }
         }
       }
     } else if (filter.kind === "type") {
-      for (const e of library.entries) {
-        if (e.type === filter.type) visible.add(e.id);
-      }
+      for (const e of library.entries) if (e.type === filter.type) visible.add(e.id);
       const parents = new Set<string>();
-      for (const e of library.entries) {
-        if (visible.has(e.id) && e.categoryId) parents.add(e.categoryId);
-      }
+      for (const e of library.entries) if (visible.has(e.id) && e.categoryId) parents.add(e.categoryId);
       for (const c of library.categories) {
         if (parents.has(c.id)) {
           visible.add(c.id);
@@ -136,7 +112,7 @@ export default function ClientShell({ library }: Props) {
   }, [filter, library]);
 
   const handleToggleFlight = useCallback(() => setFlightMode((v) => !v), []);
-  const handleDive = useCallback((id: string) => { setDiveTargetId(id); }, []);
+  const handleDive = useCallback((id: string) => setDiveTargetId(id), []);
 
   return (
     <>
@@ -153,30 +129,28 @@ export default function ClientShell({ library }: Props) {
         />
       ) : null}
 
-      {library && uiVisible ? (
-        <div className="ne-topbar">
-          <SearchBar
-            entries={library.entries}
-            categories={library.categories}
-            onHighlight={setHighlightIds}
-            onDive={handleDive}
-            onListOpen={() => setListOpen(true)}
-          />
-          <FilterBar
-            categories={library.categories}
-            filter={filter}
-            onChange={setFilter}
-          />
-        </div>
-      ) : null}
-
       <HeroOverlay
         stats={library?.stats ?? null}
         uiVisible={uiVisible}
         flightMode={flightMode}
-        onToggleFlight={handleToggleFlight}
-        hoveredNode={hoveredNode}
       />
+
+      {library && uiVisible ? (
+        <CommandBlob
+          entries={library.entries}
+          categories={library.categories}
+          stats={library.stats}
+          generatedAt={library.generatedAt}
+          onHighlight={setHighlightIds}
+          onDive={handleDive}
+          onListOpen={() => setListOpen(true)}
+          flightMode={flightMode}
+          onToggleFlight={handleToggleFlight}
+          filter={filter}
+          onFilterChange={setFilter}
+        />
+      ) : null}
+
       <HoverTooltip hoveredNode={hoveredNode} categoryNameById={categoryNameById} />
 
       {library ? (
