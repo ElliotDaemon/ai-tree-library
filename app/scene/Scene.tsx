@@ -57,6 +57,10 @@ interface Props {
   flightMode: boolean;
   onUiVisibilityChange: (visible: boolean) => void;
   onHoverNodeChange: (node: LayoutNode | null) => void;
+  visibleIds: Set<string> | null;
+  highlightIds: Set<string> | null;
+  diveTargetId: string | null;
+  onDiveConsumed: () => void;
 }
 
 // ---------- Background dust ----------
@@ -262,8 +266,39 @@ function DiveAnimator({
   return null;
 }
 
+// ---------- External dive trigger (search/list-popup → dive into a specific node) ----------
+function ExternalDiveTrigger({
+  targetId,
+  nodes,
+  divePhase,
+  onTrigger,
+}: {
+  targetId: string | null;
+  nodes: LayoutNode[];
+  divePhase: "idle" | "diving" | "arrived" | "returning";
+  onTrigger: (node: LayoutNode) => void;
+}) {
+  useEffect(() => {
+    if (!targetId) return;
+    if (divePhase !== "idle") return;
+    const node = nodes.find((n) => n.id === targetId);
+    if (node) onTrigger(node);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [targetId]);
+  return null;
+}
+
 // ---------- Scene root ----------
-export default function Scene({ library, flightMode, onUiVisibilityChange, onHoverNodeChange }: Props) {
+export default function Scene({
+  library,
+  flightMode,
+  onUiVisibilityChange,
+  onHoverNodeChange,
+  visibleIds,
+  highlightIds,
+  diveTargetId,
+  onDiveConsumed,
+}: Props) {
   const [divedNode, setDivedNode] = useState<LayoutNode | null>(null);
   const [savedView, setSavedView] = useState<{ pos: THREE.Vector3; target: THREE.Vector3 } | null>(null);
   const [divePhase, setDivePhase] = useState<"idle" | "diving" | "arrived" | "returning">("idle");
@@ -330,6 +365,14 @@ export default function Scene({ library, flightMode, onUiVisibilityChange, onHov
             onHoverNodeChange={onHoverNodeChange}
             divedNodeId={divedNode?.id ?? null}
             bobActive={divePhase === "idle" && !flightMode}
+            visibleIds={visibleIds}
+            highlightIds={highlightIds}
+          />
+          <ExternalDiveTrigger
+            targetId={diveTargetId}
+            nodes={library.layout.nodes}
+            divePhase={divePhase}
+            onTrigger={(node) => { handleNodeClick(node); onDiveConsumed(); }}
           />
           {divedNode && (divePhase === "diving" || divePhase === "arrived") ? (
             <DiveDecor node={divedNode} />

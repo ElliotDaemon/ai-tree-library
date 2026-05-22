@@ -1,9 +1,10 @@
-// Particle cloud: bright "prominent" data nodes (entries + categories + subcats)
-// mixed with dim filler particles for visual mass.
-// - Pointer/raycast checks all hits, picks the first PROMINENT one (so filler
-//   in the foreground doesn't block clicks).
-// - Hovering a prominent node emits hover events up (for cursor-following tooltip).
-// - Click on a prominent node calls onNodeClick (used to trigger dive).
+// Particle cloud — pure data, no filler. Three line kinds rendered separately:
+//   - backbone   (cat→subcat→entry): brightest, opacity 0.35
+//   - cluster    (intra-subcat star constellation): medium, opacity 0.18
+//   - tag-bridge (cross-subcat shared-tag): faintest, opacity 0.08
+//
+// Filter mask (visibleIds): when active, only entries/categories whose id is in
+// the set are rendered. Filler/non-matching nodes vanish entirely.
 
 "use client";
 
@@ -13,7 +14,7 @@ import { useFrame, useThree } from "@react-three/fiber";
 
 export interface LayoutNode {
   id: string;
-  kind: "category" | "subcategory" | "entry" | "filler";
+  kind: "trunk" | "category" | "subcategory" | "entry" | "filler";
   name?: string;
   color: [number, number, number];
   rawColor?: string | null;
@@ -28,7 +29,7 @@ export interface LayoutNode {
 export interface LayoutLink {
   source: string;
   target: string;
-  kind: string;
+  kind: string; // backbone | cluster | tag-bridge | proximity (legacy)
 }
 
 interface Props {
@@ -38,31 +39,32 @@ interface Props {
   onHoverNodeChange: (node: LayoutNode | null) => void;
   divedNodeId: string | null;
   bobActive: boolean;
+  visibleIds: Set<string> | null; // null = show everything
+  highlightIds: Set<string> | null; // null = no special highlight
 }
 
 function makeGlowTexture(): THREE.Texture {
   const c = document.createElement("canvas");
-  c.width = 64;
-  c.height = 64;
+  c.width = 64; c.height = 64;
   const ctx = c.getContext("2d")!;
   const g = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
   g.addColorStop(0, "rgba(255,255,255,1)");
   g.addColorStop(0.2, "rgba(255,255,255,0.85)");
   g.addColorStop(0.5, "rgba(255,255,255,0.25)");
   g.addColorStop(1, "rgba(0,0,0,0)");
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, 64, 64);
-  const t = new THREE.CanvasTexture(c);
-  t.needsUpdate = true;
-  return t;
+  ctx.fillStyle = g; ctx.fillRect(0, 0, 64, 64);
+  const t = new THREE.CanvasTexture(c); t.needsUpdate = true; return t;
 }
 
 const VS = /* glsl */ `
 attribute float size;
 attribute vec3 color;
+attribute float alpha;
 varying vec3 vColor;
+varying float vAlpha;
 void main() {
   vColor = color;
+  vAlpha = alpha;
   vec4 mv = modelViewMatrix * vec4(position, 1.0);
   gl_PointSize = size * (350.0 / -mv.z);
   gl_Position = projectionMatrix * mv;
@@ -71,9 +73,10 @@ void main() {
 const FS = /* glsl */ `
 uniform sampler2D pointTexture;
 varying vec3 vColor;
+varying float vAlpha;
 void main() {
   vec4 tex = texture2D(pointTexture, gl_PointCoord);
-  gl_FragColor = vec4(vColor, 1.0) * tex;
+  gl_FragColor = vec4(vColor, 1.0) * tex * vAlpha;
   if (gl_FragColor.a < 0.02) discard;
 }
 `;
@@ -85,49 +88,80 @@ export default function Constellation({
   onHoverNodeChange,
   divedNodeId,
   bobActive,
+  visibleIds,
+  highlightIds,
 }: Props) {
   const { gl, camera, pointer } = useThree();
 
-  // Map index → node (used by hover + click)
-  const indexToNode = useMemo(() => nodes, [nodes]);
+  const nodeByIndex = useMemo(() => nodes, [nodes]);
+  const nodeById = useMemo(() => {
+    const m = new Map<string, LayoutNode>();
+    for (const n of nodes) m.set(n.id, n);
+    return m;
+  }, [nodes]);
 
-  // Position / color / size buffers
-  const { positions, colors, sizes } = useMemo(() => {
+  // Visibility resolution: any filter applied?
+  const filterActive = visibleIds !== null;
+  const highlightActive = highlightIds !== null;
+
+  // Per-node alpha (filtered out = 0, dimmed = 0.18, highlighted = 1.0)
+  const { positions, colors, sizes, alphas } = useMemo(() => {
     const p = new Float32Array(nodes.length * 3);
     const c = new Float32Array(nodes.length * 3);
     const s = new Float32Array(nodes.length);
+    const a = new Float32Array(nodes.length);
     for (let i = 0; i < nodes.length; i++) {
-      p[i * 3] = nodes[i].position[0];
-      p[i * 3 + 1] = nodes[i].position[1];
-      p[i * 3 + 2] = nodes[i].position[2];
-      c[i * 3] = nodes[i].color[0];
-      c[i * 3 + 1] = nodes[i].color[1];
-      c[i * 3 + 2] = nodes[i].color[2];
-      s[i] = nodes[i].size;
-    }
-    return { positions: p, colors: c, sizes: s };
-  }, [nodes]);
+      const n = nodes[i];
+      p[i * 3] = n.position[0]; p[i * 3 + 1] = n.position[1]; p[i * 3 + 2] = n.position[2];
+      c[i * 3] = n.color[0]; c[i * 3 + 1] = n.color[1]; c[i * 3 + 2] = n.color[2];
+      s[i] = n.size;
 
-  // Plexus line buffer
-  const { linePos, lineCol } = useMemo(() => {
-    const byId = new Map(nodes.map((n) => [n.id, n]));
-    const pos: number[] = [];
-    const col: number[] = [];
-    for (const l of links) {
-      const a = byId.get(l.source);
-      const b = byId.get(l.target);
-      if (!a || !b) continue;
-      pos.push(a.position[0], a.position[1], a.position[2], b.position[0], b.position[1], b.position[2]);
-      col.push(a.color[0], a.color[1], a.color[2], b.color[0], b.color[1], b.color[2]);
+      let alpha = 1;
+      // Trunk: always invisible (it's just a logical anchor)
+      if (n.kind === "trunk") alpha = 0;
+      else if (filterActive) {
+        alpha = visibleIds!.has(n.id) ? 1 : 0;
+      } else if (highlightActive) {
+        alpha = highlightIds!.has(n.id) ? 1 : 0.22;
+      }
+      a[i] = alpha;
     }
-    return { linePos: new Float32Array(pos), lineCol: new Float32Array(col) };
-  }, [links, nodes]);
+    return { positions: p, colors: c, sizes: s, alphas: a };
+  }, [nodes, visibleIds, highlightIds, filterActive, highlightActive]);
+
+  // --- Lines: split by kind so each gets its own material/opacity ---
+  const lineSets = useMemo(() => {
+    const sets: Record<string, { pos: number[]; col: number[] }> = {
+      backbone: { pos: [], col: [] },
+      cluster: { pos: [], col: [] },
+      "tag-bridge": { pos: [], col: [] },
+      proximity: { pos: [], col: [] }, // legacy
+    };
+    for (const link of links) {
+      const a = nodeById.get(link.source);
+      const b = nodeById.get(link.target);
+      if (!a || !b) continue;
+      if (a.kind === "trunk" || b.kind === "trunk") continue; // skip invisible trunk
+      // Filter: both endpoints must be visible
+      if (filterActive) {
+        if (!visibleIds!.has(a.id) || !visibleIds!.has(b.id)) continue;
+      }
+      const kind = sets[link.kind] ? link.kind : "proximity";
+      sets[kind].pos.push(a.position[0], a.position[1], a.position[2], b.position[0], b.position[1], b.position[2]);
+      sets[kind].col.push(a.color[0], a.color[1], a.color[2], b.color[0], b.color[1], b.color[2]);
+    }
+    return {
+      backbone: { pos: new Float32Array(sets.backbone.pos), col: new Float32Array(sets.backbone.col) },
+      cluster: { pos: new Float32Array(sets.cluster.pos), col: new Float32Array(sets.cluster.col) },
+      bridge: { pos: new Float32Array(sets["tag-bridge"].pos), col: new Float32Array(sets["tag-bridge"].col) },
+      proximity: { pos: new Float32Array(sets.proximity.pos), col: new Float32Array(sets.proximity.col) },
+    };
+  }, [links, nodeById, visibleIds, filterActive]);
 
   const uniforms = useMemo(() => ({ pointTexture: { value: makeGlowTexture() } }), []);
   const pointsRef = useRef<THREE.Points>(null);
   const treeGroupRef = useRef<THREE.Group>(null);
 
-  // Raycaster (wider threshold than default — clicks/hover are forgiving)
   const raycaster = useMemo(() => {
     const r = new THREE.Raycaster();
     r.params.Points = { threshold: 2.5 };
@@ -137,45 +171,38 @@ export default function Constellation({
   const [hoveredId, setHoveredId] = useState<string | null>(null);
 
   useFrame((s) => {
-    // Subtle floating animation
     if (treeGroupRef.current) {
       treeGroupRef.current.position.y = bobActive ? Math.sin(s.clock.elapsedTime * 0.5) * 1.4 : 0;
     }
-
-    // Per-frame hover raycast
     if (!pointsRef.current) return;
     raycaster.setFromCamera(pointer, camera);
     const hits = raycaster.intersectObject(pointsRef.current);
-
-    // Pick the closest PROMINENT hit (skip filler)
     let bestId: string | null = null;
     let bestDist = Infinity;
     for (const h of hits) {
       const i = h.index ?? -1;
-      const node = indexToNode[i];
-      if (!node) continue;
-      if (node.kind === "filler") continue;
+      const n = nodeByIndex[i];
+      if (!n) continue;
+      if (n.kind === "filler" || n.kind === "trunk") continue;
+      // Respect filter: can't hover filtered-out nodes
+      if (filterActive && !visibleIds!.has(n.id)) continue;
       const d = h.distanceToRay ?? h.distance;
-      if (d < bestDist) {
-        bestDist = d;
-        bestId = node.id;
-      }
+      if (d < bestDist) { bestDist = d; bestId = n.id; }
     }
     if (bestId !== hoveredId) {
       setHoveredId(bestId);
-      onHoverNodeChange(bestId ? indexToNode.find((n) => n.id === bestId) ?? null : null);
+      onHoverNodeChange(bestId ? (nodeByIndex.find((n) => n.id === bestId) ?? null) : null);
     }
   });
 
-  // Click handler — uses the hover state (so foreground filler doesn't steal)
   useEffect(() => {
     let downPos = { x: 0, y: 0 };
     const onDown = (e: PointerEvent) => { downPos = { x: e.clientX, y: e.clientY }; };
     const onUp = (e: PointerEvent) => {
       const moved = Math.hypot(e.clientX - downPos.x, e.clientY - downPos.y);
-      if (moved > 5) return; // it was a drag, not a click
+      if (moved > 5) return;
       if (!hoveredId) return;
-      const node = indexToNode.find((n) => n.id === hoveredId);
+      const node = nodeByIndex.find((n) => n.id === hoveredId);
       if (node) onNodeClick(node);
     };
     const el = gl.domElement;
@@ -185,9 +212,8 @@ export default function Constellation({
       el.removeEventListener("pointerdown", onDown);
       el.removeEventListener("pointerup", onUp);
     };
-  }, [gl, hoveredId, indexToNode, onNodeClick]);
+  }, [gl, hoveredId, nodeByIndex, onNodeClick]);
 
-  // Cursor feedback
   useEffect(() => {
     if (typeof document === "undefined") return;
     document.body.style.cursor = hoveredId ? "pointer" : "default";
@@ -195,22 +221,46 @@ export default function Constellation({
 
   return (
     <group ref={treeGroupRef}>
-      {/* Plexus lines */}
-      {linePos.length > 0 ? (
+      {/* Backbone — strongest */}
+      {lineSets.backbone.pos.length > 0 ? (
         <lineSegments>
           <bufferGeometry>
-            <bufferAttribute attach="attributes-position" args={[linePos, 3]} />
-            <bufferAttribute attach="attributes-color" args={[lineCol, 3]} />
+            <bufferAttribute attach="attributes-position" args={[lineSets.backbone.pos, 3]} />
+            <bufferAttribute attach="attributes-color" args={[lineSets.backbone.col, 3]} />
           </bufferGeometry>
-          <lineBasicMaterial vertexColors transparent opacity={0.15} blending={THREE.AdditiveBlending} depthWrite={false} />
+          <lineBasicMaterial vertexColors transparent opacity={0.32} blending={THREE.AdditiveBlending} depthWrite={false} />
         </lineSegments>
       ) : null}
 
+      {/* Cluster constellations — medium */}
+      {lineSets.cluster.pos.length > 0 ? (
+        <lineSegments>
+          <bufferGeometry>
+            <bufferAttribute attach="attributes-position" args={[lineSets.cluster.pos, 3]} />
+            <bufferAttribute attach="attributes-color" args={[lineSets.cluster.col, 3]} />
+          </bufferGeometry>
+          <lineBasicMaterial vertexColors transparent opacity={0.16} blending={THREE.AdditiveBlending} depthWrite={false} />
+        </lineSegments>
+      ) : null}
+
+      {/* Tag bridges — faintest */}
+      {lineSets.bridge.pos.length > 0 ? (
+        <lineSegments>
+          <bufferGeometry>
+            <bufferAttribute attach="attributes-position" args={[lineSets.bridge.pos, 3]} />
+            <bufferAttribute attach="attributes-color" args={[lineSets.bridge.col, 3]} />
+          </bufferGeometry>
+          <lineBasicMaterial vertexColors transparent opacity={0.07} blending={THREE.AdditiveBlending} depthWrite={false} />
+        </lineSegments>
+      ) : null}
+
+      {/* Particle cloud (all nodes; per-vertex alpha hides filtered ones) */}
       <points ref={pointsRef}>
         <bufferGeometry>
           <bufferAttribute attach="attributes-position" args={[positions, 3]} />
           <bufferAttribute attach="attributes-color" args={[colors, 3]} />
           <bufferAttribute attach="attributes-size" args={[sizes, 1]} />
+          <bufferAttribute attach="attributes-alpha" args={[alphas, 1]} />
         </bufferGeometry>
         <shaderMaterial
           args={[{
@@ -224,82 +274,57 @@ export default function Constellation({
         />
       </points>
 
-      {/* Rarity decorations: crowns on Legendary, sparkles on Hidden Gems */}
-      <RarityDecorations nodes={indexToNode} />
+      {/* Rarity decorations */}
+      <RarityDecorations nodes={nodeByIndex} visibleIds={visibleIds} />
 
-      {/* Hover ring on the prominent node currently under the cursor (skip during dive) */}
+      {/* Hover ring */}
       {hoveredId && hoveredId !== divedNodeId ? (
-        <HoverRing node={indexToNode.find((n) => n.id === hoveredId)!} />
+        <HoverRing node={nodeByIndex.find((n) => n.id === hoveredId)!} />
       ) : null}
     </group>
   );
 }
 
-// Render small "icon" sprites above Legendary nodes and golden orbiting
-// sparkles around Hidden Gems. Established and Rare get no extra decoration
-// (size + brightness in the base shader already differentiates them).
-function RarityDecorations({ nodes }: { nodes: LayoutNode[] }) {
-  const legendaries = useMemo(() => nodes.filter((n) => n.kind === "entry" && n.rarity === "legendary"), [nodes]);
-  const gems = useMemo(() => nodes.filter((n) => n.kind === "entry" && n.rarity === "gem"), [nodes]);
+function RarityDecorations({ nodes, visibleIds }: { nodes: LayoutNode[]; visibleIds: Set<string> | null }) {
+  const filterActive = visibleIds !== null;
+  const legendaries = useMemo(() => nodes.filter((n) => n.kind === "entry" && n.rarity === "legendary" && (!filterActive || visibleIds!.has(n.id))), [nodes, visibleIds, filterActive]);
+  const gems = useMemo(() => nodes.filter((n) => n.kind === "entry" && n.rarity === "gem" && (!filterActive || visibleIds!.has(n.id))), [nodes, visibleIds, filterActive]);
 
-  // Build a shared crown texture (a tiny gold crown SVG rasterized)
   const crownTexture = useMemo(() => {
     const c = document.createElement("canvas");
-    c.width = 64;
-    c.height = 64;
+    c.width = 64; c.height = 64;
     const ctx = c.getContext("2d")!;
-    // gold gradient crown
     const g = ctx.createLinearGradient(0, 0, 0, 64);
-    g.addColorStop(0, "#fde68a");
-    g.addColorStop(0.5, "#fbbf24");
-    g.addColorStop(1, "#f59e0b");
+    g.addColorStop(0, "#fde68a"); g.addColorStop(0.5, "#fbbf24"); g.addColorStop(1, "#f59e0b");
     ctx.fillStyle = g;
-    // simple stylized crown
     ctx.beginPath();
-    ctx.moveTo(8, 50);
-    ctx.lineTo(8, 24);
-    ctx.lineTo(20, 36);
-    ctx.lineTo(32, 14);
-    ctx.lineTo(44, 36);
-    ctx.lineTo(56, 24);
-    ctx.lineTo(56, 50);
-    ctx.closePath();
+    ctx.moveTo(8, 50); ctx.lineTo(8, 24); ctx.lineTo(20, 36); ctx.lineTo(32, 14);
+    ctx.lineTo(44, 36); ctx.lineTo(56, 24); ctx.lineTo(56, 50); ctx.closePath();
     ctx.fill();
-    // base bar
     ctx.fillRect(8, 50, 48, 6);
-    // gems on top points
     ctx.fillStyle = "#fff";
     ctx.beginPath(); ctx.arc(20, 30, 2.5, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.arc(32, 10, 3, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.arc(44, 30, 2.5, 0, Math.PI * 2); ctx.fill();
-    const tex = new THREE.CanvasTexture(c);
-    tex.needsUpdate = true;
-    return tex;
+    const tex = new THREE.CanvasTexture(c); tex.needsUpdate = true; return tex;
   }, []);
 
-  // Sparkle texture (small bright point)
   const sparkleTexture = useMemo(() => {
     const c = document.createElement("canvas");
-    c.width = 32;
-    c.height = 32;
+    c.width = 32; c.height = 32;
     const ctx = c.getContext("2d")!;
     const g = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
     g.addColorStop(0, "rgba(255, 235, 150, 1)");
     g.addColorStop(0.4, "rgba(255, 200, 80, 0.7)");
     g.addColorStop(1, "rgba(0, 0, 0, 0)");
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, 32, 32);
-    const t = new THREE.CanvasTexture(c);
-    t.needsUpdate = true;
-    return t;
+    ctx.fillStyle = g; ctx.fillRect(0, 0, 32, 32);
+    const t = new THREE.CanvasTexture(c); t.needsUpdate = true; return t;
   }, []);
 
-  // Animate sparkles orbiting their host gem nodes
   const sparkleGroupRef = useRef<THREE.Group>(null);
   useFrame((s) => {
     if (!sparkleGroupRef.current) return;
     const t = s.clock.elapsedTime;
-    // Each child group rotates at its own rate via stored userData
     for (let i = 0; i < sparkleGroupRef.current.children.length; i++) {
       const child = sparkleGroupRef.current.children[i];
       child.rotation.y = t * 0.8 + i * 0.7;
@@ -309,25 +334,15 @@ function RarityDecorations({ nodes }: { nodes: LayoutNode[] }) {
 
   return (
     <>
-      {/* Crowns floating above legendary nodes */}
       {legendaries.map((n) => (
         <sprite
           key={`crown-${n.id}`}
           position={[n.position[0], n.position[1] + n.size * 1.5, n.position[2]]}
           scale={[3.2, 3.2, 1]}
         >
-          <spriteMaterial
-            map={crownTexture}
-            transparent
-            depthTest={false}
-            depthWrite={false}
-            blending={THREE.AdditiveBlending}
-            toneMapped={false}
-          />
+          <spriteMaterial map={crownTexture} transparent depthTest={false} depthWrite={false} blending={THREE.AdditiveBlending} toneMapped={false} />
         </sprite>
       ))}
-
-      {/* Three orbiting sparkles per hidden gem */}
       <group ref={sparkleGroupRef}>
         {gems.map((n) => (
           <group key={`gem-${n.id}`} position={n.position}>
@@ -335,19 +350,8 @@ function RarityDecorations({ nodes }: { nodes: LayoutNode[] }) {
               const r = n.size * 1.5;
               const ang = (j / 3) * Math.PI * 2;
               return (
-                <sprite
-                  key={j}
-                  position={[Math.cos(ang) * r, Math.sin(ang) * r * 0.4, Math.sin(ang) * r]}
-                  scale={[0.9, 0.9, 1]}
-                >
-                  <spriteMaterial
-                    map={sparkleTexture}
-                    transparent
-                    depthTest={false}
-                    depthWrite={false}
-                    blending={THREE.AdditiveBlending}
-                    toneMapped={false}
-                  />
+                <sprite key={j} position={[Math.cos(ang) * r, Math.sin(ang) * r * 0.4, Math.sin(ang) * r]} scale={[0.9, 0.9, 1]}>
+                  <spriteMaterial map={sparkleTexture} transparent depthTest={false} depthWrite={false} blending={THREE.AdditiveBlending} toneMapped={false} />
                 </sprite>
               );
             })}
@@ -369,13 +373,7 @@ function HoverRing({ node }: { node: LayoutNode }) {
   return (
     <mesh ref={ref} position={node.position}>
       <ringGeometry args={[node.size * 1.2, node.size * 1.4, 32]} />
-      <meshBasicMaterial
-        color={new THREE.Color(node.color[0], node.color[1], node.color[2])}
-        transparent
-        opacity={0.7}
-        side={THREE.DoubleSide}
-        toneMapped={false}
-      />
+      <meshBasicMaterial color={new THREE.Color(node.color[0], node.color[1], node.color[2])} transparent opacity={0.7} side={THREE.DoubleSide} toneMapped={false} />
     </mesh>
   );
 }
