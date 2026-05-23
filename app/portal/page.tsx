@@ -1,4 +1,5 @@
-// /portal — admin dashboard. Gated by middleware.ts via ADMIN_TOKEN.
+// /portal — admin dashboard. Gated by middleware.ts via ADMIN_USER +
+// ADMIN_PASSWORD with a signed httpOnly session cookie (see lib/portal-auth).
 // Server component, cached 5 min. Refresh button reloads.
 
 import type { Metadata } from "next";
@@ -47,6 +48,11 @@ export default async function PortalPage() {
         <div className="po-header-right">
           <span className="po-updated">Updated {ageLabel((Date.now() - new Date(d.generatedAt).getTime()) / 3_600_000)}</span>
           <Link href="/" className="po-link-home">← Site</Link>
+          <form method="POST" action="/api/portal/logout" style={{ display: "inline" }}>
+            <button type="submit" className="po-link-home" style={{ background: "none", border: "none", cursor: "pointer", font: "inherit", padding: 0 }}>
+              Log out
+            </button>
+          </form>
         </div>
       </header>
 

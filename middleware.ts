@@ -1,18 +1,20 @@
 // Auth gate for /portal.
 //
-// Two ways in:
-//   1. ?key=<ADMIN_TOKEN>  (URL query — works on mobile, sets a cookie so
-//      you don't have to keep the query string)
-//   2. The ne_admin cookie (set automatically after first successful key auth)
+// Replaces the old query-string-token flow with proper username/password
+// auth that integrates cleanly with password managers (Proton Pass, 1Password,
+// Bitwarden, browser keychain). The gate uses an httpOnly HMAC-signed
+// session cookie set by /api/portal/login.
 //
-// Fail-closed by default in production. If ADMIN_TOKEN is missing on a
-// production deploy, the portal returns 403 with setup instructions
-// instead of being wide open. Only Vercel preview deployments (which Vercel
-// itself protects with a deployment-protection password) get the same
-// behavior as production. Localhost dev stays open for testing.
+// Fail-closed in production: if ADMIN_PASSWORD is missing on a production
+// deploy, /portal returns 403 with setup instructions. Only true localhost
+// dev gets open access for testing.
+//
+// /portal/login is the only path under /portal that bypasses the cookie
+// check — otherwise nobody could ever log in.
 
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { isAdminConfigured, verifySession, SESSION_COOKIE } from "@/lib/portal-auth";
 
 const FORBIDDEN_HTML = (msg: string) =>
   `<!doctype html><html><head><title>Portal — AI Tree Library</title>
@@ -33,53 +35,38 @@ function forbidden(message: string) {
   });
 }
 
-export function middleware(req: NextRequest) {
+export async function middleware(req: NextRequest) {
   const url = req.nextUrl;
   if (!url.pathname.startsWith("/portal")) return NextResponse.next();
 
-  const expected = process.env.ADMIN_TOKEN;
-  // Treat any Vercel deploy as production for security purposes — including
-  // preview deployments. Only true localhost dev gets open access.
+  // /portal/login is the auth check itself — must be reachable unauthenticated
+  if (url.pathname === "/portal/login") return NextResponse.next();
+
   const isProductionLike =
     process.env.VERCEL === "1" || process.env.NODE_ENV === "production";
 
-  if (!expected) {
+  if (!isAdminConfigured()) {
     if (isProductionLike) {
       // FAIL CLOSED. Without this, anyone with the URL would see analytics.
       return forbidden(
         `<p>Portal is locked.</p>
-         <p>An <code>ADMIN_TOKEN</code> env var must be set on this deployment for the portal to be reachable.</p>
-         <p style="font-size:0.7rem;color:#566b8e;margin-top:1.2rem;">Site admin: add <code>ADMIN_TOKEN</code> in Vercel → Settings → Environment Variables, then redeploy.</p>`
+         <p>An <code>ADMIN_PASSWORD</code> env var must be set on this deployment for the portal to be reachable.</p>
+         <p style="font-size:0.7rem;color:#566b8e;margin-top:1.2rem;">Site admin: add <code>ADMIN_PASSWORD</code> (and optionally <code>ADMIN_USER</code>, defaults to <code>admin</code>) in Vercel → Settings → Environment Variables, then trigger a fresh deploy.</p>`,
       );
     }
-    // Local dev — allow through (no token needed)
+    // Local dev — allow through (no password needed)
     return NextResponse.next();
   }
 
-  const cookie = req.cookies.get("ne_admin")?.value;
-  if (cookie === expected) return NextResponse.next();
+  const cookie = req.cookies.get(SESSION_COOKIE)?.value;
+  if (await verifySession(cookie)) return NextResponse.next();
 
-  const provided = url.searchParams.get("key");
-  if (provided && provided === expected) {
-    // Strip the key from the URL, set cookie, redirect to clean URL
-    const clean = new URL(url);
-    clean.searchParams.delete("key");
-    const res = NextResponse.redirect(clean);
-    res.cookies.set("ne_admin", expected, {
-      httpOnly: true,
-      secure: true,
-      sameSite: "lax",
-      maxAge: 60 * 60 * 24 * 30, // 30 days
-      path: "/",
-    });
-    return res;
+  // No valid session → send to login, preserve the destination via ?from=
+  const login = new URL("/portal/login", url);
+  if (url.pathname !== "/portal") {
+    login.searchParams.set("from", url.pathname + url.search);
   }
-
-  // Wrong/missing key
-  return forbidden(
-    `<p>Access requires the admin token.</p>
-     <p>Append <code>?key=&lt;your token&gt;</code> to the URL.</p>`
-  );
+  return NextResponse.redirect(login);
 }
 
 export const config = {

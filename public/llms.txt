@@ -13,4 +13,4 @@ https://aitreelibrary.com/llms-full.txt contains every entry with its long descr
 URL, rarity tier, tags, and category — meant for LLM ingestion.
 
 Curated by Elliot Daemon (https://elliotdaemon.com)
-Last updated: 2026-05-22T17:06:57.940Z
+Last updated: 2026-05-23T01:53:23.800Z
