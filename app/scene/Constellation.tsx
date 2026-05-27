@@ -11,6 +11,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { useFrame, useThree } from "@react-three/fiber";
+import { createRingTexture } from "./ringTexture";
 
 export interface LayoutNode {
   id: string;
@@ -165,11 +166,33 @@ export default function Constellation({
 
   const [hoveredId, setHoveredId] = useState<string | null>(null);
 
+  // R3F's `pointer` defaults to (0, 0) NDC = the center of the canvas, so on
+  // mount the raycaster would fire from screen-center and "hover" whichever
+  // node sits at the tree's center — visible on mobile as a phantom tooltip
+  // appearing top-left before the user has touched anything. Gate the
+  // raycast on a real pointer interaction (move OR press) having happened.
+  const pointerActiveRef = useRef(false);
+
+  useEffect(() => {
+    const el = gl.domElement;
+    const mark = () => { pointerActiveRef.current = true; };
+    el.addEventListener("pointermove", mark, { passive: true });
+    el.addEventListener("pointerdown", mark, { passive: true });
+    return () => {
+      el.removeEventListener("pointermove", mark);
+      el.removeEventListener("pointerdown", mark);
+    };
+  }, [gl]);
+
   useFrame((s) => {
     if (treeGroupRef.current) {
       treeGroupRef.current.position.y = bobActive ? Math.sin(s.clock.elapsedTime * 0.5) * 1.4 : 0;
     }
     if (!pointsRef.current) return;
+    // Skip hover-raycast until first real pointer interaction (fixes the
+    // mobile mount glitch where a tooltip appears top-left for a node the
+    // user never touched).
+    if (!pointerActiveRef.current) return;
     raycaster.setFromCamera(pointer, camera);
     const hits = raycaster.intersectObject(pointsRef.current);
     let bestId: string | null = null;
@@ -347,18 +370,45 @@ function RarityDecorations({ nodes, visibleIds }: { nodes: LayoutNode[]; visible
   );
 }
 
+// Billboarded liquid-glass ring shown around the currently-hovered node.
+// Uses the shared ringTexture so the ring always faces the camera (it does
+// NOT spin awkwardly with the scene like the previous flat ringGeometry).
+// Slowly rotates the texture so the shine arc sweeps around the ring,
+// giving the glass-catching-light feel the user asked for.
 function HoverRing({ node }: { node: LayoutNode }) {
-  const ref = useRef<THREE.Mesh>(null);
+  const spriteRef = useRef<THREE.Sprite>(null);
+  const matRef = useRef<THREE.SpriteMaterial>(null);
+  const ringTexture = useMemo(() => createRingTexture(), []);
+
   useFrame((s) => {
-    if (ref.current) {
-      const t = 1 + Math.sin(s.clock.elapsedTime * 3) * 0.06;
-      ref.current.scale.setScalar(t);
+    const t = s.clock.elapsedTime;
+    if (spriteRef.current) {
+      // Subtle pulse — much gentler than the dive rings
+      const breath = 1 + Math.sin(t * 2.4) * 0.04;
+      const base = node.size * 1.35;
+      spriteRef.current.scale.set(base * breath, base * breath, 1);
+    }
+    if (matRef.current) {
+      // Shine sweeps around the ring
+      matRef.current.rotation = t * 0.5;
     }
   });
+
+  const color = new THREE.Color(node.color[0], node.color[1], node.color[2]);
+
   return (
-    <mesh ref={ref} position={node.position}>
-      <ringGeometry args={[node.size * 1.2, node.size * 1.4, 32]} />
-      <meshBasicMaterial color={new THREE.Color(node.color[0], node.color[1], node.color[2])} transparent opacity={0.7} side={THREE.DoubleSide} toneMapped={false} />
-    </mesh>
+    <sprite ref={spriteRef} position={node.position}>
+      <spriteMaterial
+        ref={matRef}
+        map={ringTexture}
+        color={color}
+        transparent
+        opacity={0.75}
+        blending={THREE.AdditiveBlending}
+        depthWrite={false}
+        depthTest={false}
+        toneMapped={false}
+      />
+    </sprite>
   );
 }

@@ -20,6 +20,7 @@ import HoverTooltip from "../components/HoverTooltip";
 interface Entry {
   id: string;
   name: string;
+  slug?: string;
   url: string;
   type: string;
   description: string;

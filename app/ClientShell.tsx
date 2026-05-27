@@ -39,6 +39,7 @@ interface LibraryFile {
   entries: Array<{
     id: string;
     name: string;
+    slug?: string;
     url: string;
     type: string;
     description: string;

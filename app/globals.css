@@ -102,21 +102,21 @@ body {
    Stats card — top-right, auto-updating live counts
    ============================================================ */
 
+/* Liquid-glass stats — no visible box, transparent shimmer like the
+   ELLIOT DAEMON credit mark. Numbers carry the chrome shine; labels are
+   delicate uppercase. Sits in the top-right corner, fades with the rest
+   of the UI during dive. */
 .ne-stats-card {
   position: fixed;
   top: 1.4rem;
   right: 1.6rem;
   z-index: 12;
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
-  border-radius: 14px;
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  box-shadow: var(--glass-shadow);
-  padding: 0.7rem 1rem;
+  padding: 0.2rem 0.1rem;
   text-align: right;
   pointer-events: none;
   transition: opacity 0.5s ease, transform 0.5s ease;
+  /* No border, no background, no shadow — purely typographic. The
+     individual numbers do all the visual work via .ne-stats-num. */
 }
 
 .ne-stats-card.ne-hidden { opacity: 0; transform: translateY(-14px); }
@@ -125,27 +125,46 @@ body {
   display: flex;
   align-items: baseline;
   justify-content: flex-end;
-  gap: 0.35rem;
-  margin-bottom: 0.18rem;
-  font-size: 0.62rem;
-  letter-spacing: 0.14em;
+  gap: 0.4rem;
+  margin-bottom: 0.22rem;
+  font-size: 0.58rem;
+  letter-spacing: 0.18em;
   color: var(--muted);
   text-transform: uppercase;
+  font-weight: 400;
 }
 
 .ne-stats-row:last-child { margin-bottom: 0; }
 
 .ne-stats-num {
-  color: var(--primary);
-  font-weight: 600;
+  font-family: var(--font-wordmark), "Josefin Sans", "Trebuchet MS", sans-serif;
+  font-weight: 300;
+  font-size: 0.95rem;
+  letter-spacing: 0.06em;
   font-variant-numeric: tabular-nums;
-  font-size: 0.74rem;
-  letter-spacing: 0.02em;
-  text-shadow: 0 0 8px rgba(0, 243, 255, 0.35);
+  /* Same chrome-shine treatment as the credit mark */
+  background:
+    linear-gradient(
+      105deg,
+      rgba(220, 232, 248, 0.88) 0%,
+      rgba(220, 232, 248, 0.88) 38%,
+      rgba(255, 255, 255, 1) 47%,
+      rgba(200, 232, 255, 1) 50%,
+      rgba(255, 255, 255, 1) 53%,
+      rgba(220, 232, 248, 0.88) 62%,
+      rgba(220, 232, 248, 0.88) 100%
+    );
+  background-size: 250% 100%;
+  background-position: 100% 0;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: 0 0 22px rgba(0, 243, 255, 0.06);
+  animation: ne-chrome-shine 7s ease-in-out infinite;
 }
 
-.ne-stats-label { color: rgba(255, 255, 255, 0.65); }
-.ne-stats-sep { color: rgba(255, 255, 255, 0.18); margin: 0 0.15rem; }
+.ne-stats-label { color: rgba(180, 200, 220, 0.5); font-weight: 400; }
+.ne-stats-sep { color: rgba(255, 255, 255, 0.14); margin: 0 0.1rem; }
 
 /* ============================================================
    Bottom hint (subtle, contextual)
@@ -711,6 +730,18 @@ body {
   text-transform: uppercase;
   border-radius: 999px;
   margin-bottom: 1rem;
+  text-decoration: none;
+}
+
+.ne-panel-badge-link {
+  cursor: pointer;
+  transition: background 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.ne-panel-badge-link:hover {
+  background: rgba(0, 243, 255, 0.14);
+  box-shadow: 0 0 14px rgba(0, 243, 255, 0.18);
+  transform: translateY(-1px);
 }
 
 .ne-panel-title {
@@ -739,6 +770,13 @@ body {
   margin-bottom: 1.25rem;
 }
 
+.ne-panel-cta-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+}
+
 .ne-panel-link {
   display: block;
   text-align: center;
@@ -751,13 +789,33 @@ body {
   background: rgba(0, 243, 255, 0.03);
   text-decoration: none;
   border-radius: 8px;
-  margin-bottom: 1.25rem;
   transition: background 0.2s ease, box-shadow 0.2s ease;
 }
 
 .ne-panel-link:hover {
   background: rgba(0, 243, 255, 0.12);
   box-shadow: 0 0 18px rgba(0, 243, 255, 0.25);
+}
+
+.ne-panel-link-secondary {
+  display: block;
+  text-align: center;
+  padding: 0.5rem;
+  font-size: 0.65rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(180, 200, 220, 0.55);
+  background: transparent;
+  border: 1px dashed rgba(180, 200, 220, 0.18);
+  border-radius: 8px;
+  text-decoration: none;
+  transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+}
+
+.ne-panel-link-secondary:hover {
+  color: var(--primary);
+  border-color: rgba(0, 243, 255, 0.35);
+  background: rgba(0, 243, 255, 0.04);
 }
 
 .ne-panel-source {
@@ -778,17 +836,17 @@ body {
 .ne-panel-list { list-style: none; padding: 0; margin: 0; }
 
 .ne-panel-list li {
-  padding: 10px 14px;
+  padding: 10px 12px;
   background: rgba(255, 255, 255, 0.03);
   border-left: 2px solid transparent;
   margin-bottom: 6px;
   font-size: 0.82rem;
   color: #d1dcf0;
-  transition: all 0.2s ease;
+  transition: background 0.2s ease, border-left-color 0.2s ease, transform 0.2s ease;
   cursor: pointer;
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: 10px;
   border-radius: 6px;
 }
 
@@ -798,19 +856,53 @@ body {
   transform: translateX(4px);
 }
 
-.ne-panel-list-name { color: #fff; font-size: 0.82rem; }
+.ne-panel-list-dot {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-top: 6px;
+  align-self: flex-start;
+}
+
+.ne-panel-list-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ne-panel-list-name {
+  color: #fff;
+  font-size: 0.82rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.ne-panel-list-rarity { font-size: 0.78rem; }
+
+.ne-panel-list-desc {
+  color: rgba(180, 200, 220, 0.65);
+  font-size: 0.7rem;
+  line-height: 1.45;
+  margin-top: 1px;
+}
+
 .ne-panel-list-sub {
-  font-size: 0.62rem;
+  font-size: 0.6rem;
   color: var(--muted);
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   margin-top: 2px;
 }
 .ne-panel-list-arrow {
   color: var(--primary);
-  opacity: 0.6;
+  opacity: 0.5;
   font-size: 1.1rem;
-  margin-left: 8px;
+  margin-left: 4px;
+  flex-shrink: 0;
 }
 
 .ne-btn-back {
@@ -858,6 +950,19 @@ body {
   background: rgba(234, 179, 8, 0.14);
   border-color: rgba(234, 179, 8, 0.4);
   color: #fde047;
+}
+
+/* Clickable tag pill — navigates to /tag/[slug] for cross-category browse */
+.ne-pill-link {
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+}
+
+.ne-pill-link:hover {
+  background: rgba(0, 243, 255, 0.1);
+  color: var(--primary);
+  border-color: rgba(0, 243, 255, 0.4);
 }
 
 /* ============================================================
@@ -1225,37 +1330,43 @@ body {
   .ne-stats-card {
     top: 0.85rem;
     right: 0.95rem;
-    padding: 0.55rem 0.75rem;
+    padding: 0;
   }
   .ne-stats-row {
-    margin-bottom: 0.1rem;
-    font-size: 0.55rem;
-    letter-spacing: 0.1em;
+    margin-bottom: 0.12rem;
+    font-size: 0.5rem;
+    letter-spacing: 0.14em;
+    gap: 0.3rem;
   }
-  .ne-stats-num { font-size: 0.66rem; }
+  .ne-stats-num { font-size: 0.78rem; letter-spacing: 0.04em; }
 
   .ne-hint { display: none; }
 
   .ne-blob { bottom: 4.5rem; }
   .ne-blob.collapsed {
-    height: 2.4rem;
-    padding: 0 1rem;
+    height: 2.2rem;
+    padding: 0 0.85rem;
   }
   .ne-blob.expanded {
-    width: calc(100vw - 1.6rem);
-    max-width: calc(100vw - 1.6rem);
-    padding: 0.85rem 0.9rem;
+    width: min(28rem, calc(100vw - 1.4rem));
+    max-width: min(28rem, calc(100vw - 1.4rem));
+    padding: 0.7rem 0.75rem;
+    border-radius: 18px;
   }
-  .ne-blob-core { gap: 0.4rem; height: 2.4rem; }
+  .ne-blob-core { gap: 0.35rem; height: 2.2rem; }
   .ne-blob-hint { display: none; }
-  .ne-blob-search-input { font-size: 0.82rem; }
+  .ne-blob-search { gap: 0.45rem; }
+  .ne-blob-search-input { font-size: 0.85rem; padding: 0.3rem 0; }
+  .ne-blob-search-icon { font-size: 0.95rem; }
   .ne-blob-pill {
-    font-size: 0.62rem;
-    padding: 0.28rem 0.6rem;
+    font-size: 0.6rem;
+    padding: 0.26rem 0.55rem;
     letter-spacing: 0.08em;
   }
+  .ne-blob-filters { gap: 0.35rem; flex-wrap: wrap; }
   .ne-blob-stats { gap: 0.45rem; font-size: 0.55rem; }
   .ne-blob-stats strong { font-size: 0.62rem; }
+  .ne-blob-submit-btn { font-size: 0.6rem; padding: 0.26rem 0.55rem; }
 
   .ne-credit {
     bottom: 0.9rem;
@@ -1298,11 +1409,12 @@ body {
   .ne-brand-text { display: none; }
 
   .ne-stats-card {
-    /* Single-line ultra-compact */
-    padding: 0.5rem 0.65rem;
+    /* Phones: just the headline number, rest hidden */
+    padding: 0;
   }
   .ne-stats-row + .ne-stats-row { display: none; }
   .ne-stats-row:first-child { margin-bottom: 0; }
+  .ne-stats-num { font-size: 0.72rem; }
 
   .ne-credit-label { font-size: 0.46rem; letter-spacing: 0.12em; }
   .ne-credit-mark { font-size: 0.62rem; letter-spacing: 0.14em; }
@@ -2235,6 +2347,54 @@ body:has(.tp-page), body:has(.cp-page), body:has(.legal-page) {
 }
 
 .cp-explore:hover { background: rgba(0, 243, 255, 0.1); box-shadow: 0 0 18px rgba(0, 243, 255, 0.18); }
+
+/* Tag strip on /tag/[name] — "often paired with" cloud */
+.cp-tag-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+  margin-top: 1.2rem;
+  padding-top: 1.2rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.cp-tag-strip-label {
+  font-size: 0.62rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(180, 200, 220, 0.45);
+  margin-right: 0.4rem;
+}
+
+.cp-tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.7rem;
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  color: rgba(220, 232, 248, 0.85);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  text-decoration: none;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.cp-tag-chip:hover {
+  background: rgba(0, 243, 255, 0.1);
+  color: var(--primary);
+  border-color: rgba(0, 243, 255, 0.4);
+}
+
+.cp-tag-chip-count {
+  font-size: 0.6rem;
+  color: rgba(180, 200, 220, 0.5);
+  padding: 1px 5px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 999px;
+}
 
 .cp-sub {
   max-width: 60rem;

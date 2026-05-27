@@ -4,6 +4,7 @@
 import { promises as fs } from "node:fs";
 import { join } from "node:path";
 import { cache } from "react";
+import { slugify } from "./slug";
 
 export interface LibraryEntry {
   id: string;
@@ -190,12 +191,65 @@ export async function relatedEntries(entry: LibraryEntry, n = 8): Promise<Librar
   return out;
 }
 
-export function rarityMeta(rarity?: string): { tier: string; label: string; icon: string } {
+export type RarityTier = "legendary" | "established" | "rare" | "gem";
+
+export function rarityMeta(rarity?: string): { tier: RarityTier; label: string; icon: string } {
   if (!rarity) return { tier: "established", label: "Established", icon: "⭐" };
-  if (rarity.includes("Legendary")) return { tier: "legendary", label: "Legendary", icon: "👑" };
-  if (rarity.includes("Hidden Gem")) return { tier: "gem", label: "Hidden Gem", icon: "🌟" };
-  if (rarity.includes("Rare")) return { tier: "rare", label: "Rare", icon: "💎" };
+  // Accept both raw lowercase values (from layout.nodes) and Notion-display
+  // values (with capitals + spaces) so callers don't have to normalize.
+  const r = rarity.toLowerCase();
+  if (r.includes("legendary")) return { tier: "legendary", label: "Legendary", icon: "👑" };
+  if (r.includes("gem")) return { tier: "gem", label: "Hidden Gem", icon: "🌟" };
+  if (r.includes("rare")) return { tier: "rare", label: "Rare", icon: "💎" };
   return { tier: "established", label: "Established", icon: "⭐" };
+}
+
+/** All entries belonging to a given rarity tier. */
+export async function entriesByRarity(tier: RarityTier): Promise<LibraryEntry[]> {
+  const lib = await loadLibrary();
+  if (!lib) return [];
+  return lib.entries.filter((e) => rarityMeta(e.rarity).tier === tier);
+}
+
+/**
+ * Returns one entry per unique tag slug, along with the original display name
+ * and the count of entries carrying it. Filters out empty tags.
+ */
+export async function getAllTags(): Promise<Array<{ slug: string; name: string; count: number }>> {
+  const lib = await loadLibrary();
+  if (!lib) return [];
+  const seen = new Map<string, { name: string; count: number }>();
+  for (const e of lib.entries) {
+    for (const t of e.tags ?? []) {
+      const s = slugify(t);
+      if (!s) continue;
+      const existing = seen.get(s);
+      if (existing) existing.count++;
+      else seen.set(s, { name: t, count: 1 });
+    }
+  }
+  return Array.from(seen.entries())
+    .map(([slug, v]) => ({ slug, ...v }))
+    .sort((a, b) => b.count - a.count);
+}
+
+export async function findEntriesByTagSlug(tagSlug: string): Promise<{
+  name: string;
+  entries: LibraryEntry[];
+}> {
+  const lib = await loadLibrary();
+  if (!lib) return { name: "", entries: [] };
+  let name = "";
+  const entries = lib.entries.filter((e) => {
+    for (const t of e.tags ?? []) {
+      if (slugify(t) === tagSlug) {
+        if (!name) name = t;
+        return true;
+      }
+    }
+    return false;
+  });
+  return { name, entries };
 }
 
 export function hostnameOf(url: string): string {

@@ -13,6 +13,8 @@ export default function Footer() {
           {" · "}AI Tree Library <span className="ne-footer-r">®</span>
         </div>
         <nav className="ne-footer-nav" aria-label="Footer">
+          <Link href="/legendary">👑 Legendary</Link>
+          <Link href="/hidden-gems">🌟 Hidden Gems</Link>
           <Link href="/about">About</Link>
           <Link href="/privacy">Privacy</Link>
           <Link href="/terms">Terms</Link>

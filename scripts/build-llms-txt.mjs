@@ -63,6 +63,12 @@ brief.push("Live constellation: " + SITE);
 brief.push("Full machine-readable catalog: " + SITE + "/llms-full.txt");
 brief.push("Sitemap: " + SITE + "/sitemap.xml");
 brief.push("");
+brief.push("## Curated landing pages");
+brief.push("");
+brief.push("- [Legendary AI Tools](" + SITE + "/legendary): industry-defining picks across all categories");
+brief.push("- [Hidden Gem AI Tools](" + SITE + "/hidden-gems): underrated, lesser-known tools worth attention");
+brief.push("- Tag pages at " + SITE + "/tag/<slug>: one URL per shared descriptor across tools");
+brief.push("");
 
 for (const cat of topLevel) {
   brief.push("## " + cat.name);

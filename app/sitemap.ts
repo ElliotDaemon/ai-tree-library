@@ -1,5 +1,5 @@
 import type { MetadataRoute } from "next";
-import { loadLibrary } from "../lib/library";
+import { getAllTags, loadLibrary } from "../lib/library";
 
 const SITE = "https://aitreelibrary.com";
 
@@ -9,6 +9,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   const out: MetadataRoute.Sitemap = [
     { url: `${SITE}/`, lastModified: lastMod, changeFrequency: "daily", priority: 1.0 },
+    { url: `${SITE}/legendary`, lastModified: lastMod, changeFrequency: "weekly", priority: 0.8 },
+    { url: `${SITE}/hidden-gems`, lastModified: lastMod, changeFrequency: "weekly", priority: 0.8 },
     { url: `${SITE}/about`, lastModified: lastMod, changeFrequency: "monthly", priority: 0.4 },
     { url: `${SITE}/privacy`, lastModified: lastMod, changeFrequency: "yearly", priority: 0.3 },
     { url: `${SITE}/terms`, lastModified: lastMod, changeFrequency: "yearly", priority: 0.3 },
@@ -31,6 +33,19 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         lastModified: lastMod,
         changeFrequency: "weekly",
         priority: e.featured ? 0.7 : 0.6,
+      });
+    }
+    // Every tag (long-tail SEO surface)
+    const tags = await getAllTags();
+    for (const t of tags) {
+      // Only include tags that appear on 2+ entries — single-occurrence tags
+      // are mostly noise (typos / one-off labels) and bloat the sitemap.
+      if (t.count < 2) continue;
+      out.push({
+        url: `${SITE}/tag/${t.slug}`,
+        lastModified: lastMod,
+        changeFrequency: "weekly",
+        priority: 0.5,
       });
     }
   }
