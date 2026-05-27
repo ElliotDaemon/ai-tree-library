@@ -1,0 +1,52 @@
+# Backfills LongDescription on Notion Library entries via Claude Haiku 4.5.
+#
+# Run manually from the Actions tab: "Run workflow" → optionally set max.
+# Also runs weekly on Sundays at 04:00 UTC so any new submissions get
+# enriched without you having to think about it.
+#
+# Requires repo secrets:
+#   - ANTHROPIC_API_KEY  (https://console.anthropic.com/settings/keys)
+#   - NOTION_TOKEN       (the same integration token used in Vercel env)
+#
+# Cost: ~$0.001 per entry. The script is idempotent (skips entries that
+# already have LongDescription), so reruns are cheap.
+
+name: Enrich descriptions
+
+on:
+  workflow_dispatch:
+    inputs:
+      max:
+        description: "Max entries to enrich this run (default 50)"
+        required: false
+        default: "50"
+  schedule:
+    # Sundays 04:00 UTC — picks up the week's submissions
+    - cron: "0 4 * * 0"
+
+permissions:
+  contents: read
+
+jobs:
+  enrich:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run enrichment
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+        run: |
+          MAX="${{ inputs.max || '50' }}"
+          echo "Enriching up to $MAX entries…"
+          npm run enrich -- --max "$MAX"
