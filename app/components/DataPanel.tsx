@@ -14,6 +14,7 @@
 
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import type { DivedNode } from "../scene/Scene";
 import type { LayoutNode } from "../scene/Constellation";
@@ -180,8 +181,38 @@ export default function DataPanel({ divedData, library, onBack, onSelectRelated 
     node.kind === "category" ? "Category" : node.kind === "subcategory" ? "Subcategory" : "Tool"
   );
 
+  // Mobile: panel starts as a peek-sheet at ~42vh so the asteroid belt +
+  // connected lines stay visible above. Tap drag handle or X to toggle
+  // expanded (~88vh). Desktop ignores this — sidebar fills full height.
+  const [expanded, setExpanded] = useState(false);
+
   return (
-    <aside className="ne-panel active" style={{ borderLeftColor: accent }}>
+    <aside
+      className={`ne-panel active ${expanded ? "ne-panel-expanded" : ""}`}
+      style={{ borderLeftColor: accent }}
+    >
+      {/* Mobile-only drag handle. Tap to toggle peek ↔ expanded.
+          Hidden on desktop (sidebar layout doesn't need it). */}
+      <button
+        type="button"
+        className="ne-panel-handle"
+        onClick={() => setExpanded((v) => !v)}
+        aria-label={expanded ? "Collapse panel" : "Expand panel"}
+      >
+        <span className="ne-panel-handle-bar" />
+      </button>
+      {/* X close — always visible at top-right so user can dismiss the
+          sheet without scrolling to find the back button. */}
+      <button
+        type="button"
+        className="ne-panel-close"
+        onClick={onBack}
+        aria-label="Close"
+        style={{ color: accent }}
+      >
+        ×
+      </button>
+
       <div style={{ flex: 1, overflowY: "auto", paddingRight: 4 }}>
         <div className="ne-panel-header">
           {topLevelCategorySlug ? (

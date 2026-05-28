@@ -729,6 +729,14 @@ body {
 
 .ne-panel.active { transform: translateX(0); }
 
+/* Drag handle + X close are mobile-only affordances. Hide on desktop
+   where the side panel slides in from the right and has plenty of
+   space + a dedicated back button at the bottom. */
+.ne-panel-handle,
+.ne-panel-close {
+  display: none;
+}
+
 .ne-panel-header { margin-bottom: 1.5rem; }
 
 .ne-panel-badge {
@@ -1388,7 +1396,9 @@ body {
   .ne-credit-label { font-size: 0.5rem; letter-spacing: 0.14em; }
   .ne-credit-mark { font-size: 0.72rem; letter-spacing: 0.18em; }
 
-  /* Slide-in panel: full-width sheet on mobile */
+  /* Slide-in panel: full-width peek sheet on mobile so the asteroid
+     belt + connected lines stay visible above. Tap drag handle or X
+     to toggle expanded. */
   .ne-panel {
     top: auto;
     right: 0;
@@ -1396,13 +1406,71 @@ body {
     bottom: 0;
     width: 100%;
     max-width: 100%;
-    max-height: 80vh;
+    max-height: 42vh;
     border-radius: 18px 18px 0 0;
     transform: translateY(100%);
-    padding: 1.5rem 1.25rem 1.75rem;
+    padding: 1.25rem 1.25rem 1.5rem;
+    transition: transform 0.45s var(--liquid-ease), max-height 0.45s var(--liquid-ease);
   }
   .ne-panel.active { transform: translateY(0); }
+  .ne-panel.ne-panel-expanded { max-height: 88vh; }
   .ne-panel-title { font-size: 1.4rem; }
+
+  /* Drag handle — small pill at top center, visible affordance for
+     "this is a sheet you can resize." Tap toggles expand/collapse.
+     Overrides desktop default of display:none. */
+  .ne-panel-handle {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    height: 1.4rem;
+    margin-top: -0.5rem;
+    margin-bottom: 0.4rem;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+  }
+  .ne-panel-handle-bar {
+    display: block;
+    width: 2.4rem;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.25);
+    border-radius: 2px;
+    transition: background 0.18s ease, width 0.18s ease;
+  }
+  .ne-panel-handle:hover .ne-panel-handle-bar,
+  .ne-panel-handle:active .ne-panel-handle-bar {
+    background: rgba(0, 243, 255, 0.55);
+    width: 3rem;
+  }
+
+  /* X close — top-right of sheet, always visible. Lets user dismiss
+     without scrolling to find the bottom back button.
+     Overrides desktop default of display:none. */
+  .ne-panel-close {
+    display: block;
+    position: absolute;
+    top: 0.4rem;
+    right: 0.7rem;
+    width: 2rem;
+    height: 2rem;
+    font-size: 1.6rem;
+    line-height: 1;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    opacity: 0.7;
+    transition: opacity 0.18s ease, transform 0.18s ease;
+    padding: 0;
+    z-index: 2;
+  }
+  .ne-panel-close:hover,
+  .ne-panel-close:active {
+    opacity: 1;
+    transform: scale(1.1);
+  }
 
   /* List popup: tighter on phones */
   .ne-listpop-backdrop { padding: 0.6rem; }
