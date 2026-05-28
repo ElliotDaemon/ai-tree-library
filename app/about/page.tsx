@@ -58,7 +58,7 @@ export default function AboutPage() {
           <a href="https://elliotdaemon.com" target="_blank" rel="noopener noreferrer">
             Elliot Daemon
           </a>{" "}
-          — independent creative technologist, label owner (11:11 Records), and operator of{" "}
+          — independent creative technologist, label owner (11:11 RECORDS), and operator of{" "}
           <a href="https://elliotdaemon.com" target="_blank" rel="noopener noreferrer">
             ELLIOT DAEMON®
           </a>. The library started as a personal bookmark folder and became the constellation.
