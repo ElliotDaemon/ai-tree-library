@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "node scripts/fetch-content.mjs && node scripts/build-llms-txt.mjs && next build",
+    "build": "node scripts/fetch-content.mjs && node scripts/build-llms-txt.mjs && node scripts/build-favicon.mjs && next build",
     "start": "next start",
     "lint": "eslint",
     "fetch-content": "node scripts/fetch-content.mjs",
@@ -37,6 +37,7 @@
     "@types/three": "^0.171.0",
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
+    "png-to-ico": "^3.0.1",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
