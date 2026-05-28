@@ -1,60 +1,36 @@
-// Decorations rendered around a node during dive.
+// Decorations rendered when a node is picked. Two parts:
 //
-// New design (per user feedback "rings are too big, don't face us, too bland"):
-//   - 2 billboarded sprite rings (not 3D torus) → always face the camera,
-//     never spin awkwardly with the scene
-//   - Smaller scale than before (1.5x and 2.2x node.size rather than 1.8/2.3/2.8
-//     of an absolute world distance)
-//   - Liquid-glass texture from ringTexture.ts with animated shine arc
-//   - Pulse + slow opposite-direction rotation of the shine; the rings
-//     themselves stay still relative to the camera
+//   1. AsteroidBelt — the picked-node indicator. Sparkling 3D particle
+//      ring orbiting on a tilted plane. Replaces the previous billboarded
+//      liquid-glass sprite rings per user feedback ("instead of a
+//      transparent liquid glass circle that shines, let's just make it
+//      like a sparkling 3D asteroid belt indicating we picked this node").
 //
-// Particle burst preserved — it's the "POP" of arrival.
+//   2. Particle burst — one-shot expanding cloud of particles in the
+//      node's color, fading out over ~1.5s. Kept from the original
+//      DiveDecor — it's the satisfying "POP!" the moment you commit to
+//      a dive.
 
 "use client";
 
 import { useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { useFrame } from "@react-three/fiber";
-import gsap from "gsap";
 import type { LayoutNode } from "./Constellation";
-import { createRingTexture } from "./ringTexture";
+import AsteroidBelt from "./AsteroidBelt";
 
 interface Props {
   node: LayoutNode;
 }
 
 export default function DiveDecor({ node }: Props) {
-  const groupRef = useRef<THREE.Group>(null);
-  const innerMatRef = useRef<THREE.SpriteMaterial>(null);
-  const outerMatRef = useRef<THREE.SpriteMaterial>(null);
   const burstGeoRef = useRef<THREE.BufferGeometry>(null);
   const burstMatRef = useRef<THREE.PointsMaterial>(null);
   const burstVelRef = useRef<THREE.Vector3[]>([]);
   const burstTimeRef = useRef(0);
 
-  const ringTexture = useMemo(() => createRingTexture(), []);
-
-  // Pop-in scale animation + reset shine + reset burst
+  // Reset burst on each new dive target
   useEffect(() => {
-    if (!groupRef.current) return;
-    groupRef.current.scale.setScalar(0.1);
-    gsap.to(groupRef.current.scale, {
-      x: 1, y: 1, z: 1,
-      duration: 1.2,
-      ease: "elastic.out(1, 0.7)",
-    });
-
-    if (innerMatRef.current) {
-      innerMatRef.current.opacity = 0;
-      gsap.to(innerMatRef.current, { opacity: 0.85, duration: 0.9, ease: "power2.out" });
-    }
-    if (outerMatRef.current) {
-      outerMatRef.current.opacity = 0;
-      gsap.to(outerMatRef.current, { opacity: 0.55, duration: 1.1, ease: "power2.out" });
-    }
-
-    // Reset burst
     burstTimeRef.current = 0;
     if (burstMatRef.current) burstMatRef.current.opacity = 1;
     if (burstGeoRef.current) {
@@ -62,14 +38,9 @@ export default function DiveDecor({ node }: Props) {
       arr.fill(0);
       burstGeoRef.current.attributes.position.needsUpdate = true;
     }
-    return () => {
-      gsap.killTweensOf(groupRef.current?.scale ?? {});
-      if (innerMatRef.current) gsap.killTweensOf(innerMatRef.current);
-      if (outerMatRef.current) gsap.killTweensOf(outerMatRef.current);
-    };
   }, [node]);
 
-  // Burst velocity vectors (one-time)
+  // Per-particle velocity vectors (computed once)
   if (burstVelRef.current.length === 0) {
     const v: THREE.Vector3[] = [];
     for (let i = 0; i < 100; i++) {
@@ -83,19 +54,7 @@ export default function DiveDecor({ node }: Props) {
 
   const burstPositions = useMemo(() => new Float32Array(100 * 3), []);
 
-  useFrame((s) => {
-    const t = s.clock.elapsedTime;
-    // Rotate the shine arcs in opposite directions for depth
-    if (innerMatRef.current) innerMatRef.current.rotation = t * 0.35;
-    if (outerMatRef.current) outerMatRef.current.rotation = -t * 0.22;
-
-    // Subtle breathing on the outer ring
-    if (groupRef.current) {
-      const breath = 1 + Math.sin(t * 1.2) * 0.025;
-      groupRef.current.scale.y = breath;
-    }
-
-    // Burst animation
+  useFrame(() => {
     if (burstMatRef.current && burstGeoRef.current && burstMatRef.current.opacity > 0) {
       burstTimeRef.current += 0.018;
       const arr = burstGeoRef.current.attributes.position.array as Float32Array;
@@ -110,58 +69,30 @@ export default function DiveDecor({ node }: Props) {
   });
 
   const color = new THREE.Color(node.color[0], node.color[1], node.color[2]);
-  const innerScale = node.size * 1.5;
-  const outerScale = node.size * 2.2;
 
   return (
-    <group position={node.position}>
-      <group ref={groupRef}>
-        {/* Inner ring — brighter, tighter */}
-        <sprite scale={[innerScale, innerScale, 1]}>
-          <spriteMaterial
-            ref={innerMatRef}
-            map={ringTexture}
-            color={color}
-            transparent
-            opacity={0}
-            blending={THREE.AdditiveBlending}
-            depthWrite={false}
-            depthTest={false}
-            toneMapped={false}
-          />
-        </sprite>
-        {/* Outer ring — softer, wider */}
-        <sprite scale={[outerScale, outerScale, 1]}>
-          <spriteMaterial
-            ref={outerMatRef}
-            map={ringTexture}
-            color={color}
-            transparent
-            opacity={0}
-            blending={THREE.AdditiveBlending}
-            depthWrite={false}
-            depthTest={false}
-            toneMapped={false}
-          />
-        </sprite>
-      </group>
+    <>
+      {/* The persistent selection indicator */}
+      <AsteroidBelt node={node} />
 
-      {/* Particle burst */}
-      <points>
-        <bufferGeometry ref={burstGeoRef}>
-          <bufferAttribute attach="attributes-position" args={[burstPositions, 3]} />
-        </bufferGeometry>
-        <pointsMaterial
-          ref={burstMatRef}
-          color={color}
-          size={1.6}
-          transparent
-          opacity={1}
-          blending={THREE.AdditiveBlending}
-          depthWrite={false}
-          toneMapped={false}
-        />
-      </points>
-    </group>
+      {/* One-shot particle burst at the picked node's center */}
+      <group position={node.position}>
+        <points>
+          <bufferGeometry ref={burstGeoRef}>
+            <bufferAttribute attach="attributes-position" args={[burstPositions, 3]} />
+          </bufferGeometry>
+          <pointsMaterial
+            ref={burstMatRef}
+            color={color}
+            size={1.6}
+            transparent
+            opacity={1}
+            blending={THREE.AdditiveBlending}
+            depthWrite={false}
+            toneMapped={false}
+          />
+        </points>
+      </group>
+    </>
   );
 }

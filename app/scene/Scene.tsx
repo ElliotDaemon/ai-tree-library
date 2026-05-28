@@ -14,6 +14,7 @@ import * as THREE from "three";
 import gsap from "gsap";
 import Constellation, { type LayoutNode, type LayoutLink } from "./Constellation";
 import DiveDecor from "./DiveDecor";
+import ConnectedLinks from "./ConnectedLinks";
 import DataPanel from "../components/DataPanel";
 import HoverTooltip from "../components/HoverTooltip";
 
@@ -309,15 +310,23 @@ export default function Scene({
   const categoryById = useMemo(() => new Map(library.categories.map((c) => [c.id, c])), [library.categories]);
 
   // When the user clicks a glowing node, save where we were and trigger dive.
+  // Allowed from `idle` (first dive) or `arrived` (re-dive from a related
+  // item or a connected line click). Blocked during in-flight `diving` and
+  // `returning` so we don't yank the camera mid-animation.
   const handleNodeClick = useCallback(
     (node: LayoutNode) => {
-      if (divePhase !== "idle") return;
+      if (divePhase === "diving" || divePhase === "returning") return;
       if (node.kind === "filler") return;
-      const c = orbitControlsRef.current as { target: THREE.Vector3 } | null;
-      // capture the saved view from the camera state via R3F getter
-      const cam = (orbitControlsRef.current as { object?: THREE.Camera } | null)?.object;
-      if (cam) {
-        setSavedView({ pos: cam.position.clone(), target: c?.target.clone() ?? new THREE.Vector3(0, 10, 0) });
+      // Only capture the saved view on the FIRST dive (from the orbit
+      // view). On re-dive from `arrived`, keep the original orbit view as
+      // the "back" target so clicking back returns to the constellation,
+      // not the previous dived node.
+      if (divePhase === "idle") {
+        const c = orbitControlsRef.current as { target: THREE.Vector3 } | null;
+        const cam = (orbitControlsRef.current as { object?: THREE.Camera } | null)?.object;
+        if (cam) {
+          setSavedView({ pos: cam.position.clone(), target: c?.target.clone() ?? new THREE.Vector3(0, 10, 0) });
+        }
       }
       setDivedNode(node);
       setDivePhase("diving");
@@ -377,6 +386,17 @@ export default function Scene({
           />
           {divedNode && (divePhase === "diving" || divePhase === "arrived") ? (
             <DiveDecor node={divedNode} />
+          ) : null}
+          {divedNode && divePhase === "arrived" ? (
+            <ConnectedLinks
+              divedNode={divedNode}
+              links={library.layout.links}
+              nodes={library.layout.nodes}
+              onLineClick={(targetId) => {
+                const n = library.layout.nodes.find((x) => x.id === targetId);
+                if (n) handleNodeClick(n);
+              }}
+            />
           ) : null}
         </Suspense>
 
