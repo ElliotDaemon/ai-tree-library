@@ -148,6 +148,19 @@ if (candidates.length > MAX) {
   console.log(`\n  ${candidates.length - MAX} candidates remain — re-run with --max ${candidates.length - MAX} to finish.`);
 }
 
+// Surface failures as a non-zero exit so the GitHub Action shows red on
+// 100%-failure runs instead of green-ticking through silent disaster
+// (which happened the first time when the LongDescription field didn't
+// exist on Notion and every single Notion update threw).
+if (processed > 0 && succeeded === 0) {
+  console.error(`\n[enrich] FATAL: 0 of ${processed} entries succeeded. Likely a schema or auth issue — investigate the last error above.`);
+  process.exit(1);
+}
+if (failed > succeeded && failed > 10) {
+  console.error(`\n[enrich] WARNING: more failures (${failed}) than successes (${succeeded}). Inspect the errors above.`);
+  process.exit(2);
+}
+
 async function fetchPageText(url) {
   try {
     const controller = new AbortController();
