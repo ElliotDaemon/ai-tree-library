@@ -93,7 +93,7 @@ export default async function LegendaryPage() {
       <main className="cp-page">
         <header className="cp-topbar">
           <Link href="/" className="cp-back" aria-label="Back to constellation">
-            <span>← Back to constellation</span>
+            ← Constellation
           </Link>
         </header>
 

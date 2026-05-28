@@ -29,14 +29,7 @@ export default function CategoryPageBody({ category, subcategories, entries }: P
     <main className="cp-page">
       <header className="cp-topbar">
         <Link href="/" className="cp-back" aria-label="Back to constellation">
-          <svg viewBox="0 0 32 32" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" strokeLinecap="round" aria-hidden>
-            <line x1="16" y1="29" x2="16" y2="14" opacity="0.55" />
-            <line x1="16" y1="20" x2="9" y2="13" opacity="0.5" />
-            <line x1="16" y1="20" x2="23" y2="13" opacity="0.5" />
-            <circle cx="16" cy="14" r="1.4" fill="currentColor" />
-            <circle cx="16" cy="3.5" r="1.6" fill="currentColor" />
-          </svg>
-          <span>← Back to constellation</span>
+          ← Constellation
         </Link>
       </header>
 

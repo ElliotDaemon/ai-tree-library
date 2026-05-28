@@ -27,52 +27,61 @@ export default function ToolPageBody({ entry, category, topLevel, related }: Pro
   const paras = long ? paragraphs(long) : [];
   const host = hostnameOf(entry.url);
 
+  // Reading time estimate — 200 wpm for editorial pacing
+  const wordCount = (long || entry.description || "").trim().split(/\s+/).filter(Boolean).length;
+  const readingMinutes = Math.max(1, Math.round(wordCount / 200));
+
   return (
     <main className="tp-page">
       <header className="tp-topbar">
         <Link href="/" className="tp-back" aria-label="Back to constellation">
-          <svg viewBox="0 0 32 32" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" strokeLinecap="round" aria-hidden>
-            <line x1="16" y1="29" x2="16" y2="14" opacity="0.55" />
-            <line x1="16" y1="20" x2="9" y2="13" opacity="0.5" />
-            <line x1="16" y1="20" x2="23" y2="13" opacity="0.5" />
-            <circle cx="16" cy="14" r="1.4" fill="currentColor" />
-            <circle cx="16" cy="20" r="1.2" fill="currentColor" />
-            <circle cx="9" cy="13" r="1.3" fill="currentColor" />
-            <circle cx="23" cy="13" r="1.3" fill="currentColor" />
-            <circle cx="16" cy="3.5" r="1.6" fill="currentColor" />
-          </svg>
-          <span>← Back to constellation</span>
+          ← Constellation
         </Link>
       </header>
 
-      <article className="tp-card">
-        {topLevel ? (
-          <Link
-            href={`/category/${topLevel.slug}`}
-            className="tp-cat-badge"
-            style={{ borderColor: topLevel.color, color: topLevel.color }}
-          >
-            {topLevel.name}
-          </Link>
-        ) : null}
+      <article className="tp-article">
+        <div className="tp-eyebrow">
+          {topLevel ? (
+            <Link
+              href={`/category/${topLevel.slug}`}
+              className="tp-eyebrow-cat"
+              style={{ color: topLevel.color }}
+            >
+              {topLevel.name}
+            </Link>
+          ) : null}
+          {category && category.name !== topLevel?.name ? (
+            <>
+              <span className="tp-eyebrow-sep">/</span>
+              <span className="tp-eyebrow-sub">{category.name}</span>
+            </>
+          ) : null}
+        </div>
 
-        <h1 className="tp-title">
-          {entry.featured ? <span className="tp-crown" title="Featured">{rarity.icon}</span> : null}
-          {entry.name}
-        </h1>
+        <h1 className="tp-title">{entry.name}</h1>
 
         {entry.description ? <p className="tp-lede">{entry.description}</p> : null}
 
-        <div className="tp-pills">
-          <span className={`tp-pill tp-rarity-${rarity.tier}`}>
-            {rarity.icon} {rarity.label}
+        <div className="tp-byline">
+          <span className="tp-byline-meta">
+            <span className={`tp-rarity-chip tp-rarity-${rarity.tier}`}>
+              {rarity.icon} {rarity.label}
+            </span>
+            {entry.type ? <span className="tp-byline-dot">·</span> : null}
+            {entry.type ? <span>{entry.type}</span> : null}
+            {entry.pricing && entry.pricing !== "Unknown" ? (
+              <>
+                <span className="tp-byline-dot">·</span>
+                <span>{entry.pricing}</span>
+              </>
+            ) : null}
+            {wordCount > 80 ? (
+              <>
+                <span className="tp-byline-dot">·</span>
+                <span>{readingMinutes} min read</span>
+              </>
+            ) : null}
           </span>
-          {entry.type ? <span className="tp-pill">{entry.type}</span> : null}
-          {entry.pricing && entry.pricing !== "Unknown" ? (
-            <span className="tp-pill">{entry.pricing}</span>
-          ) : null}
-          {entry.gem ? <span className="tp-pill tp-pill-gem">✨ Gem</span> : null}
-          {entry.featured ? <span className="tp-pill tp-pill-featured">Featured</span> : null}
         </div>
 
         <VisitButton url={entry.url} name={entry.name} slug={entry.slug}>
@@ -105,27 +114,29 @@ export default function ToolPageBody({ entry, category, topLevel, related }: Pro
           </section>
         )}
 
-        {entry.tags.length > 0 ? (
-          <section className="tp-section">
-            <h2>Tags</h2>
-            <div className="tp-tags">
+        {/* Footer rail — tags + source + disclaimer collapsed into one
+            understated line, news-page style. No more h2 sections for tiny
+            metadata. */}
+        <footer className="tp-foot">
+          {entry.tags.length > 0 ? (
+            <div className="tp-foot-tags">
               {entry.tags.map((t) => (
-                <span key={t} className="tp-tag">
+                <Link
+                  key={t}
+                  href={`/tag/${t.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`}
+                  className="tp-foot-tag"
+                >
                   #{t}
-                </span>
+                </Link>
               ))}
             </div>
-          </section>
-        ) : null}
-
-        {entry.source ? (
-          <section className="tp-section">
-            <h2>Discovery</h2>
-            <p>
-              Submitted by <strong>{entry.source}</strong>.
-            </p>
-          </section>
-        ) : null}
+          ) : null}
+          {entry.source ? (
+            <div className="tp-foot-source">
+              Submitted by <strong>{entry.source}</strong>
+            </div>
+          ) : null}
+        </footer>
       </article>
 
       {related.length > 0 ? (

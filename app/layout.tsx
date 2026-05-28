@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Josefin_Sans } from "next/font/google";
+import { Geist, Geist_Mono, Josefin_Sans, Spectral } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
@@ -19,6 +19,17 @@ const geistMono = Geist_Mono({
 const josefinSans = Josefin_Sans({
   variable: "--font-wordmark",
   weight: ["300"],
+  subsets: ["latin"],
+});
+
+// Spectral = the editorial serif used on tool/category/rarity/tag pages.
+// Chosen for: low-contrast strokes that read well at body size, generous
+// x-height for legibility, three weights covering display + body + italic.
+// Same vibe as Stratechery / The Atlantic — measured, serious, considered.
+const spectral = Spectral({
+  variable: "--font-serif",
+  weight: ["400", "500", "700"],
+  style: ["normal", "italic"],
   subsets: ["latin"],
 });
 
@@ -48,7 +59,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} ${josefinSans.variable}`}>
+    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} ${josefinSans.variable} ${spectral.variable}`}>
       <body>
         {children}
         <Analytics />

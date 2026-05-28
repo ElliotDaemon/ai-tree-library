@@ -199,7 +199,10 @@ export default function CommandBlob({
   const handleLeave = () => {
     if (collapseTimer.current) clearTimeout(collapseTimer.current);
     if (query || openMenu || document.activeElement === inputRef.current) return;
-    collapseTimer.current = setTimeout(() => setExpanded(false), 600);
+    // Short collapse delay (~CSS duration) so brief cursor exits don't trigger
+    // a full collapse, but the dock doesn't feel sticky. Tuned to match
+    // --blob-dur (0.42s) — slightly under so the morph leads the exit.
+    collapseTimer.current = setTimeout(() => setExpanded(false), 220);
   };
   // Touch devices: hover never fires, so tap toggles. On the collapsed pill,
   // tapping anywhere on the core expands. The click-outside listener handles
