@@ -22,7 +22,8 @@ import sharp from "sharp";
 import pngToIco from "png-to-ico";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const OUT_PATH = join(__dirname, "..", "public", "favicon.ico");
+const PUBLIC_DIR = join(__dirname, "..", "public");
+const OUT_PATH = join(PUBLIC_DIR, "favicon.ico");
 
 // Same node-tree silhouette as app/icon.tsx and app/apple-icon.tsx.
 // Includes a rounded dark background that reads against light browser
@@ -70,3 +71,34 @@ await mkdir(dirname(OUT_PATH), { recursive: true });
 await writeFile(OUT_PATH, icoBuffer);
 
 console.log(`[build-favicon] Wrote ${OUT_PATH} (${icoBuffer.length} bytes, ${sizes.length} sizes)`);
+
+// ---------- iOS legacy fallback paths ----------
+// iPad Safari and a few in-app webviews auto-request these conventional
+// paths at the site root REGARDLESS of any <link rel="apple-touch-icon">
+// tag in HTML. With /apple-icon (Next.js's generated route) advertised
+// via the link tag they SHOULD find the modern icon, but in practice
+// iPadOS's WebKit has cached the missing-file 404 from before our
+// favicon shipped and is refusing to re-check. Putting real files at
+// these literal paths kills that fallback path forever.
+//
+// /apple-touch-icon.png            — default Apple convention
+// /apple-touch-icon-precomposed.png — same image, signals "don't add
+//                                     iOS's gloss overlay" (precomposed)
+// /apple-touch-icon-180x180.png    — size-suffixed variant some
+//                                     Safaris look for first
+const appleSize = 180;
+const appleBuffer = await sharp(svgBuffer, { density: 480 })
+  .resize(appleSize, appleSize)
+  .png()
+  .toBuffer();
+
+const appleAliases = [
+  "apple-touch-icon.png",
+  "apple-touch-icon-precomposed.png",
+  `apple-touch-icon-${appleSize}x${appleSize}.png`,
+];
+for (const name of appleAliases) {
+  const p = join(PUBLIC_DIR, name);
+  await writeFile(p, appleBuffer);
+  console.log(`[build-favicon] Wrote ${p} (${appleBuffer.length} bytes)`);
+}
