@@ -1,18 +1,44 @@
-// Portal data fetcher — pulls everything for the dashboard.
+// Portal data fetcher. Returns everything the dashboard renders.
 //
 // Sources:
-//   1. Notion API (always works, NOTION_TOKEN required)
-//      - Library counts grouped by Status
-//      - Recent pending submissions
-//      - Recent Ready entries
-//   2. Vercel Web Analytics REST API (optional — needs VERCEL_TOKEN +
-//      VERCEL_PROJECT_ID + VERCEL_TEAM_ID env vars). If unavailable, the
-//      dashboard renders without those sections and links to the Vercel
-//      dashboard instead.
+//   1. Notion (always): full Library + counts + full per-status lists
+//   2. Notion (always): Articles count + list
+//   3. Vercel Analytics REST (optional, needs VERCEL_TOKEN + IDs): visitor
+//      totals + top tools/categories/pages + recent searches
+//
+// All lists return FULL data (every entry, not top-N) so the client UI
+// can render expandable drilldowns + filterable tables. The page is
+// cached server-side via Next.js revalidate so the heavy Notion paginate
+// only runs once per cache window.
 
 import { Client } from "@notionhq/client";
+import { promises as fs } from "node:fs";
+import { join } from "node:path";
 
 const LIBRARY_DS = "63c6ed32-e30a-454f-9f66-dc353aeb54c6";
+
+export interface DashboardEntry {
+  id: string;
+  name: string;
+  url: string;
+  slug: string;
+  status: string;
+  pricing: string;
+  rarity: string;
+  source: string;
+  createdAt: string;
+  ageHours: number;
+}
+
+export interface DashboardArticle {
+  id: string;
+  title: string;
+  slug: string;
+  status: string;
+  excerpt: string;
+  publishedDate: string | null;
+  readingTimeMinutes: number;
+}
 
 export interface DashboardData {
   ok: boolean;
@@ -20,25 +46,17 @@ export interface DashboardData {
   notionOk: boolean;
   vercelOk: boolean;
   vercelDashboardUrl: string;
-  // Counts
-  statusCounts: { ready: number; submitted: number; needsReview: number; hidden: number; total: number };
-  // Lists
-  pendingSubmissions: Array<{
-    id: string;
-    name: string;
-    url: string;
-    source: string;
-    ageHours: number;
-    createdAt: string;
-  }>;
-  recentReady: Array<{
-    id: string;
-    name: string;
-    url: string;
-    createdAt: string;
-    ageHours: number;
-    rarity: string;
-  }>;
+  statusCounts: { ready: number; submitted: number; needsReview: number; hidden: number; new: number; total: number };
+  // FULL entry lists per status — used for portal drilldowns
+  entries: {
+    ready: DashboardEntry[];
+    pendingReview: DashboardEntry[]; // Submitted + Needs Review + New, sorted newest first
+    hidden: DashboardEntry[];
+  };
+  articles: {
+    count: number;
+    items: DashboardArticle[];
+  };
   // Vercel Analytics (best-effort)
   visitors?: { day: number; week: number; month: number };
   topRoutes?: Array<{ route: string; views: number }>;
@@ -48,10 +66,11 @@ export interface DashboardData {
   errors: string[];
 }
 
+// ---------- Notion helpers ----------
+
 interface NotionRichText { plain_text?: string }
 interface NotionTitle { plain_text?: string }
 interface NotionSelect { name?: string }
-interface NotionUrl { url?: string }
 interface NotionRow {
   id: string;
   created_time: string;
@@ -79,17 +98,32 @@ function hoursAgo(iso: string): number {
   return Math.max(0, (Date.now() - t) / 3600_000);
 }
 
+// Slugify mirrors lib/slug.ts so portal links land on the same URLs the
+// site renders. Kept inline to avoid runtime imports of lib/slug (which
+// already exists but tree-shaking is finicky in edge runtime).
+function slugify(s: string): string {
+  return String(s || "")
+    .normalize("NFKD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s\-_/]/g, "")
+    .replace(/[\s_/]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+}
+
 async function fetchNotionData(): Promise<Partial<DashboardData>> {
   const token = process.env.NOTION_TOKEN;
   if (!token) return { notionOk: false, errors: ["NOTION_TOKEN not set"] };
   const notion = new Client({ auth: token });
 
-  const statusCounts = { ready: 0, submitted: 0, needsReview: 0, hidden: 0, total: 0 };
-  const pendingSubmissions: DashboardData["pendingSubmissions"] = [];
-  const recentReady: DashboardData["recentReady"] = [];
+  const statusCounts = { ready: 0, submitted: 0, needsReview: 0, hidden: 0, new: 0, total: 0 };
+  const ready: DashboardEntry[] = [];
+  const pendingReview: DashboardEntry[] = [];
+  const hidden: DashboardEntry[] = [];
 
   try {
-    // Paginate the full Library to count statuses. ~500 rows is fast.
     let cursor: string | undefined;
     const allRows: NotionRow[] = [];
     do {
@@ -98,66 +132,99 @@ async function fetchNotionData(): Promise<Partial<DashboardData>> {
         start_cursor: cursor,
         page_size: 100,
       });
-      for (const r of res.results) {
-        if ("properties" in r) allRows.push(r as unknown as NotionRow);
-      }
-      cursor = res.has_more ? res.next_cursor ?? undefined : undefined;
+      allRows.push(...(res.results as unknown as NotionRow[]));
+      cursor = res.has_more ? (res.next_cursor as string) : undefined;
     } while (cursor);
 
-    statusCounts.total = allRows.length;
+    for (const row of allRows) {
+      const status = getSelect(row.properties.Status);
+      const name = getText(row.properties.Name);
+      const url = (row.properties.URL?.url ?? "").trim();
+      const slugOverride = getText(row.properties["Slug Override"]);
+      const slug = slugOverride ? slugify(slugOverride) : slugify(name);
+      const pricing = getSelect(row.properties.Pricing) || "Unknown";
+      const rarity = getSelect(row.properties.Rarity);
+      const source = getText(row.properties.Source);
+      const createdAt = row.created_time;
+      const entry: DashboardEntry = {
+        id: row.id,
+        name,
+        url,
+        slug,
+        status,
+        pricing,
+        rarity,
+        source,
+        createdAt,
+        ageHours: hoursAgo(createdAt),
+      };
 
-    for (const r of allRows) {
-      const status = getSelect(r.properties.Status);
-      if (status === "Ready") statusCounts.ready++;
-      else if (status === "Submitted") statusCounts.submitted++;
-      else if (status === "Needs Review") statusCounts.needsReview++;
-      else if (status === "Hidden") statusCounts.hidden++;
+      statusCounts.total++;
+      switch (status) {
+        case "Ready": statusCounts.ready++; ready.push(entry); break;
+        case "Submitted": statusCounts.submitted++; pendingReview.push(entry); break;
+        case "Needs Review": statusCounts.needsReview++; pendingReview.push(entry); break;
+        case "Hidden": statusCounts.hidden++; hidden.push(entry); break;
+        case "New": statusCounts.new++; pendingReview.push(entry); break;
+        default: break;
+      }
     }
 
-    // Pending submissions = Submitted, newest first
-    const submitted = allRows
-      .filter((r) => getSelect(r.properties.Status) === "Submitted")
-      .sort((a, b) => new Date(b.created_time).getTime() - new Date(a.created_time).getTime())
-      .slice(0, 10);
+    ready.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    pendingReview.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    hidden.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
-    for (const r of submitted) {
-      pendingSubmissions.push({
-        id: r.id,
-        name: getText(r.properties.Name) || new URL(r.properties.URL?.url || "https://x").hostname,
-        url: r.properties.URL?.url ?? "",
-        source: getText(r.properties.Source) || "anonymous",
-        createdAt: r.created_time,
-        ageHours: hoursAgo(r.created_time),
-      });
-    }
-
-    // Recent Ready = newest 10 by created_time
-    const ready = allRows
-      .filter((r) => getSelect(r.properties.Status) === "Ready")
-      .sort((a, b) => new Date(b.created_time).getTime() - new Date(a.created_time).getTime())
-      .slice(0, 10);
-    for (const r of ready) {
-      recentReady.push({
-        id: r.id,
-        name: getText(r.properties.Name),
-        url: r.properties.URL?.url ?? "",
-        createdAt: r.created_time,
-        ageHours: hoursAgo(r.created_time),
-        rarity: getSelect(r.properties.Rarity) || "",
-      });
-    }
-
-    return { notionOk: true, statusCounts, pendingSubmissions, recentReady };
+    return {
+      notionOk: true,
+      statusCounts,
+      entries: { ready, pendingReview, hidden },
+      errors: [],
+    };
   } catch (e) {
     return {
       notionOk: false,
       statusCounts,
-      pendingSubmissions,
-      recentReady,
+      entries: { ready, pendingReview, hidden },
       errors: [`Notion: ${(e as Error).message}`],
     };
   }
 }
+
+// ---------- Articles (from public/articles.json) ----------
+
+async function fetchArticlesData(): Promise<{ count: number; items: DashboardArticle[] }> {
+  try {
+    const raw = await fs.readFile(join(process.cwd(), "public", "articles.json"), "utf8");
+    const parsed = JSON.parse(raw) as {
+      articles?: Array<{
+        id: string;
+        title: string;
+        slug: string;
+        status: string;
+        excerpt: string;
+        publishedDate: string | null;
+        readingTimeMinutes: number;
+      }>;
+    };
+    const arr = parsed.articles ?? [];
+    return {
+      count: arr.length,
+      items: arr.map((a) => ({
+        id: a.id,
+        title: a.title,
+        slug: a.slug,
+        status: a.status,
+        excerpt: a.excerpt,
+        publishedDate: a.publishedDate,
+        readingTimeMinutes: a.readingTimeMinutes,
+      })),
+    };
+  } catch {
+    return { count: 0, items: [] };
+  }
+}
+
+// ---------- Vercel Analytics ----------
 
 interface VercelAnalyticsResponse<T> { data?: T }
 interface VercelTotalRow { value: number }
@@ -193,17 +260,7 @@ async function fetchVercelData(): Promise<Partial<DashboardData>> {
   const weekAgo = now - 7 * 24 * 3600_000;
   const monthAgo = now - 28 * 24 * 3600_000;
 
-  const errors: string[] = [];
-
-  // Best-effort: call several Vercel analytics endpoints in parallel. Each
-  // returns null on failure so partial data is fine.
-  const [
-    totalDay,
-    totalWeek,
-    totalMonth,
-    pages,
-    events,
-  ] = await Promise.all([
+  const [totalDay, totalWeek, totalMonth, pages, events] = await Promise.all([
     vercelFetch<VercelTotalRow[]>("/web/insights/totals", { from: String(dayAgo), to: String(now), event: "pageview" }),
     vercelFetch<VercelTotalRow[]>("/web/insights/totals", { from: String(weekAgo), to: String(now), event: "pageview" }),
     vercelFetch<VercelTotalRow[]>("/web/insights/totals", { from: String(monthAgo), to: String(now), event: "pageview" }),
@@ -218,10 +275,9 @@ async function fetchVercelData(): Promise<Partial<DashboardData>> {
   };
 
   const topRoutes = pages
-    ? pages.slice(0, 10).map((p) => ({ route: p.key, views: p.value }))
+    ? pages.slice(0, 20).map((p) => ({ route: p.key, views: p.value }))
     : undefined;
 
-  // Custom event aggregation: group tool_view + link_click by slug
   let topToolEvents: DashboardData["topToolEvents"] | undefined;
   let topCategoryEvents: DashboardData["topCategoryEvents"] | undefined;
   let topSearches: string[] | undefined;
@@ -253,7 +309,7 @@ async function fetchVercelData(): Promise<Partial<DashboardData>> {
     }
     topToolEvents = [...toolViews.values()]
       .sort((a, b) => b.count - a.count)
-      .slice(0, 10)
+      .slice(0, 15)
       .map((t) => {
         const clicks = toolClicks.get(t.slug) ?? 0;
         return {
@@ -266,9 +322,9 @@ async function fetchVercelData(): Promise<Partial<DashboardData>> {
       });
     topCategoryEvents = [...catViews.values()]
       .sort((a, b) => b.count - a.count)
-      .slice(0, 10)
+      .slice(0, 15)
       .map((c) => ({ slug: c.slug, name: c.name, views: c.count }));
-    topSearches = [...searches.entries()].sort((a, b) => b[1] - a[1]).slice(0, 16).map(([q]) => q);
+    topSearches = [...searches.entries()].sort((a, b) => b[1] - a[1]).slice(0, 24).map(([q]) => q);
   }
 
   return {
@@ -278,15 +334,21 @@ async function fetchVercelData(): Promise<Partial<DashboardData>> {
     topToolEvents,
     topCategoryEvents,
     topSearches,
-    errors,
+    errors: [],
   };
 }
+
+// ---------- Main ----------
 
 export async function getDashboardData(): Promise<DashboardData> {
   const team = process.env.VERCEL_TEAM_SLUG || "eperus";
   const project = process.env.VERCEL_PROJECT_SLUG || "ai-tree-library";
 
-  const [notionRes, vercelRes] = await Promise.all([fetchNotionData(), fetchVercelData()]);
+  const [notionRes, articlesRes, vercelRes] = await Promise.all([
+    fetchNotionData(),
+    fetchArticlesData(),
+    fetchVercelData(),
+  ]);
 
   const errors: string[] = [];
   if (notionRes.errors) errors.push(...notionRes.errors);
@@ -298,9 +360,9 @@ export async function getDashboardData(): Promise<DashboardData> {
     notionOk: !!notionRes.notionOk,
     vercelOk: !!vercelRes.vercelOk,
     vercelDashboardUrl: `https://vercel.com/${team}/${project}/analytics`,
-    statusCounts: notionRes.statusCounts ?? { ready: 0, submitted: 0, needsReview: 0, hidden: 0, total: 0 },
-    pendingSubmissions: notionRes.pendingSubmissions ?? [],
-    recentReady: notionRes.recentReady ?? [],
+    statusCounts: notionRes.statusCounts ?? { ready: 0, submitted: 0, needsReview: 0, hidden: 0, new: 0, total: 0 },
+    entries: notionRes.entries ?? { ready: [], pendingReview: [], hidden: [] },
+    articles: articlesRes,
     visitors: vercelRes.visitors,
     topRoutes: vercelRes.topRoutes,
     topToolEvents: vercelRes.topToolEvents,
