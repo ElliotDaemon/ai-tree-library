@@ -215,20 +215,21 @@ body {
   left: 50%;
   transform: translateX(-50%);
   z-index: 12;
+  /* Minimal dark dock — no cyan accents on chrome. Border + glow are
+     neutral whites; the only accent is the small pulsing dot in the
+     core which is intentional brand affordance. */
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, transparent 35%, rgba(0, 0, 0, 0.05) 100%),
-    var(--glass-bg);
-  border: 1px solid var(--glass-border);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035) 0%, transparent 50%, rgba(0, 0, 0, 0.04) 100%),
+    rgba(8, 10, 16, 0.74);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 999px;
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  box-shadow: var(--glass-shadow);
-  /* Overflow visible so filter dropdowns can extend below the blob */
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  box-shadow:
+    0 14px 50px rgba(0, 0, 0, 0.55),
+    0 1px 0 rgba(255, 255, 255, 0.04) inset;
   overflow: visible;
   pointer-events: auto;
-  /* All morph properties share one duration + easing so the dock expands
-     as a single fluid shape — no wobble between width finishing at 0.7s
-     and padding finishing at 0.6s. */
   transition:
     width var(--blob-dur) var(--liquid-ease),
     max-width var(--blob-dur) var(--liquid-ease),
@@ -242,14 +243,14 @@ body {
 }
 
 .ne-blob::before {
-  /* Soft inner highlight for liquid feel */
+  /* Soft inner highlight — neutral white sheen, no cyan tint */
   content: "";
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: radial-gradient(ellipse at 50% 0%, rgba(0, 243, 255, 0.08), transparent 70%);
+  background: radial-gradient(ellipse at 50% 0%, rgba(255, 255, 255, 0.04), transparent 70%);
   pointer-events: none;
-  opacity: 0.6;
+  opacity: 0.5;
   transition: opacity var(--blob-dur) var(--liquid-ease);
 }
 
@@ -265,18 +266,16 @@ body {
 .ne-blob.expanded {
   width: min(680px, calc(100vw - 3rem));
   max-width: min(680px, calc(100vw - 3rem));
-  border-radius: 22px;
+  border-radius: 18px;
   padding: 1.05rem 1.15rem;
-  border-color: var(--glass-border-strong);
+  border-color: rgba(255, 255, 255, 0.14);
   cursor: default;
   box-shadow:
-    0 18px 70px rgba(0, 0, 0, 0.6),
-    0 0 0 1px rgba(255, 255, 255, 0.05) inset,
-    0 0 100px rgba(0, 243, 255, 0.13),
-    0 1px 0 rgba(255, 255, 255, 0.08) inset;
+    0 22px 70px rgba(0, 0, 0, 0.65),
+    0 1px 0 rgba(255, 255, 255, 0.06) inset;
 }
 
-.ne-blob.expanded::before { opacity: 1; }
+.ne-blob.expanded::before { opacity: 0.85; }
 
 /* --- Core (collapsed-state contents) --- */
 
@@ -494,18 +493,18 @@ body {
   text-transform: uppercase;
   padding: 0.3rem 0.85rem;
   border-radius: 999px;
-  border: 1px solid rgba(0, 243, 255, 0.4);
-  background: rgba(0, 243, 255, 0.06);
-  color: var(--primary);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.95);
   cursor: pointer;
   font-family: inherit;
-  transition: all 0.18s ease;
+  transition: background 0.15s ease, border-color 0.15s ease;
   white-space: nowrap;
 }
 
 .ne-blob-submit-btn:hover {
-  background: rgba(0, 243, 255, 0.16);
-  box-shadow: 0 0 14px rgba(0, 243, 255, 0.3);
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.28);
 }
 
 .ne-blob-menu {
@@ -513,8 +512,8 @@ body {
   /* Open UPWARD because the blob sits near the bottom of the viewport */
   bottom: calc(100% + 8px);
   left: 0;
-  background: var(--glass-bg-strong);
-  border: 1px solid var(--glass-border-strong);
+  background: rgba(10, 12, 18, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 12px;
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
@@ -577,7 +576,7 @@ body {
 
 .ne-blob-stats > span { white-space: nowrap; }
 .ne-blob-stats strong {
-  color: var(--primary);
+  color: rgba(255, 255, 255, 0.95);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   font-size: 0.7rem;
