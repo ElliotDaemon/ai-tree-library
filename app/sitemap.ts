@@ -1,20 +1,34 @@
 import type { MetadataRoute } from "next";
 import { getAllTags, loadLibrary } from "../lib/library";
+import { loadArticles } from "../lib/articles";
 
 const SITE = "https://aitreelibrary.com";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const lib = await loadLibrary();
+  const [lib, articlesFile] = await Promise.all([loadLibrary(), loadArticles()]);
   const lastMod = lib?.generatedAt ?? new Date().toISOString();
 
   const out: MetadataRoute.Sitemap = [
     { url: `${SITE}/`, lastModified: lastMod, changeFrequency: "daily", priority: 1.0 },
+    { url: `${SITE}/articles`, lastModified: articlesFile?.generatedAt ?? lastMod, changeFrequency: "weekly", priority: 0.9 },
     { url: `${SITE}/legendary`, lastModified: lastMod, changeFrequency: "weekly", priority: 0.8 },
     { url: `${SITE}/hidden-gems`, lastModified: lastMod, changeFrequency: "weekly", priority: 0.8 },
     { url: `${SITE}/about`, lastModified: lastMod, changeFrequency: "monthly", priority: 0.4 },
     { url: `${SITE}/privacy`, lastModified: lastMod, changeFrequency: "yearly", priority: 0.3 },
     { url: `${SITE}/terms`, lastModified: lastMod, changeFrequency: "yearly", priority: 0.3 },
   ];
+
+  // Articles — highest-priority editorial pages
+  if (articlesFile) {
+    for (const a of articlesFile.articles) {
+      out.push({
+        url: `${SITE}/article/${a.slug}`,
+        lastModified: a.updatedDate ?? a.publishedDate ?? lastMod,
+        changeFrequency: "monthly",
+        priority: 0.85,
+      });
+    }
+  }
 
   if (lib) {
     // Top-level categories

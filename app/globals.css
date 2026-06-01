@@ -2821,3 +2821,347 @@ body:has(.tp-page), body:has(.cp-page), body:has(.legal-page) {
   50% { transform: scale(1.6); opacity: 0.5; }
   100% { transform: scale(1); opacity: 1; }
 }
+
+/* ============================================================
+   Articles — /articles index + /article/[slug] detail
+   Editorial magazine layout in Spectral serif. Mirrors the tool-page
+   editorial vibe so the site reads as one publication, not a CMS.
+   ============================================================ */
+
+/* ---------- Index grid (/articles) ---------- */
+
+.ar-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));
+  gap: 1.6rem;
+  max-width: 64rem;
+  margin: 0 0 3rem;
+}
+
+.ar-card {
+  display: flex;
+  flex-direction: column;
+  background: rgba(7, 14, 28, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 14px;
+  overflow: hidden;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.ar-card:hover {
+  border-color: rgba(0, 243, 255, 0.3);
+  transform: translateY(-3px);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.45);
+}
+
+.ar-card-accent {
+  height: 3px;
+  width: 100%;
+}
+
+.ar-card-body {
+  padding: 1.2rem 1.4rem 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  flex: 1;
+}
+
+.ar-card-tags {
+  display: flex;
+  gap: 0.5rem;
+  font-size: 0.62rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.ar-card-tag { font-weight: 500; }
+
+.ar-card-title {
+  font-family: var(--font-serif), "Charter", "Georgia", serif;
+  font-size: 1.4rem;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  line-height: 1.18;
+  color: rgba(244, 248, 254, 0.97);
+  margin: 0;
+}
+
+.ar-card-excerpt {
+  font-family: var(--font-serif), "Charter", "Georgia", serif;
+  font-style: italic;
+  font-size: 0.95rem;
+  color: rgba(220, 232, 248, 0.72);
+  line-height: 1.5;
+  margin: 0;
+  flex: 1;
+}
+
+.ar-card-byline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.7rem;
+  color: rgba(180, 200, 220, 0.55);
+  letter-spacing: 0.03em;
+  margin-top: 0.4rem;
+}
+
+.ar-card-byline-dot { color: rgba(255, 255, 255, 0.15); }
+
+.ar-card-compact .ar-card-title { font-size: 1.05rem; }
+.ar-card-compact .ar-card-excerpt { font-size: 0.85rem; }
+.ar-card-compact .ar-card-body { padding: 1rem 1.1rem 1.1rem; }
+
+/* ---------- Single article (/article/[slug]) ---------- */
+
+.ar-article {
+  max-width: 42rem;
+  margin: 1.5rem auto 3rem;
+  padding: 0 1.5rem;
+}
+
+.ar-eyebrow {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  font-size: 0.7rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  margin-bottom: 1.2rem;
+}
+
+.ar-eyebrow a { text-decoration: none; font-weight: 500; transition: opacity 0.18s ease; }
+.ar-eyebrow a:hover { opacity: 0.75; }
+.ar-eyebrow-sep { color: rgba(255, 255, 255, 0.2); }
+.ar-eyebrow-tag { color: rgba(180, 200, 220, 0.55); font-weight: 400; }
+
+.ar-title {
+  font-family: var(--font-serif), "Charter", "Georgia", serif;
+  font-weight: 700;
+  font-size: clamp(2.4rem, 6.5vw, 3.8rem);
+  letter-spacing: -0.025em;
+  line-height: 1.06;
+  margin: 0 0 1.2rem 0;
+  color: rgba(244, 248, 254, 0.97);
+}
+
+.ar-lede {
+  font-family: var(--font-serif), "Charter", "Georgia", serif;
+  font-style: italic;
+  font-weight: 400;
+  font-size: 1.25rem;
+  color: rgba(220, 232, 248, 0.8);
+  line-height: 1.55;
+  margin: 0 0 1.8rem 0;
+}
+
+.ar-byline {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.9rem 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  margin-bottom: 2rem;
+  font-size: 0.78rem;
+  color: rgba(180, 200, 220, 0.65);
+  letter-spacing: 0.03em;
+}
+
+.ar-byline-author { color: rgba(220, 232, 248, 0.85); font-weight: 500; }
+.ar-byline-dot { color: rgba(255, 255, 255, 0.15); margin: 0 0.1rem; }
+
+/* ---------- Article body prose ---------- */
+
+.ar-body {
+  font-family: var(--font-serif), "Charter", "Georgia", serif;
+  font-size: 1.1rem;
+  line-height: 1.78;
+  color: rgba(220, 232, 248, 0.86);
+}
+
+.ar-body p {
+  margin: 0 0 1.4rem 0;
+  letter-spacing: 0.002em;
+}
+
+/* Drop cap on the first paragraph for editorial flair */
+.ar-body > p:first-of-type::first-letter {
+  font-size: 3.6rem;
+  font-weight: 700;
+  float: left;
+  line-height: 0.85;
+  padding-right: 0.6rem;
+  padding-top: 0.45rem;
+  color: rgba(244, 248, 254, 0.97);
+}
+
+.ar-body h2 {
+  font-family: var(--font-serif), "Charter", "Georgia", serif;
+  font-size: 1.7rem;
+  font-weight: 700;
+  letter-spacing: -0.012em;
+  line-height: 1.18;
+  margin: 2.6rem 0 1rem;
+  color: rgba(244, 248, 254, 0.96);
+}
+
+.ar-body h3 {
+  font-family: var(--font-serif), "Charter", "Georgia", serif;
+  font-size: 1.25rem;
+  font-weight: 700;
+  font-style: italic;
+  letter-spacing: -0.006em;
+  margin: 2rem 0 0.7rem;
+  color: rgba(244, 248, 254, 0.94);
+}
+
+.ar-body ul,
+.ar-body ol {
+  margin: 0 0 1.4rem 1.5rem;
+  padding: 0;
+}
+
+.ar-body li {
+  margin-bottom: 0.5rem;
+}
+
+.ar-body blockquote {
+  margin: 1.8rem 0;
+  padding: 0.4rem 0 0.4rem 1.4rem;
+  border-left: 3px solid rgba(0, 243, 255, 0.45);
+  font-style: italic;
+  font-size: 1.2rem;
+  color: rgba(244, 248, 254, 0.85);
+  line-height: 1.55;
+}
+
+.ar-body hr {
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  margin: 2.4rem auto;
+  width: 6rem;
+}
+
+/* ---------- Inline tool-card embed (in articles) ---------- */
+
+.ar-toolcard {
+  display: block;
+  margin: 1.4rem 0;
+  padding: 1rem 1.2rem;
+  background: rgba(0, 243, 255, 0.04);
+  border: 1px solid rgba(0, 243, 255, 0.25);
+  border-radius: 10px;
+  text-decoration: none;
+  color: inherit;
+  transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
+}
+
+.ar-toolcard:hover {
+  background: rgba(0, 243, 255, 0.1);
+  border-color: rgba(0, 243, 255, 0.5);
+  transform: translateY(-1px);
+}
+
+.ar-toolcard-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+}
+
+.ar-toolcard-rarity { font-size: 0.95rem; line-height: 1; }
+
+.ar-toolcard-name {
+  font-family: var(--font-serif), "Charter", "Georgia", serif;
+  font-weight: 700;
+  font-size: 1.05rem;
+  letter-spacing: -0.005em;
+  color: rgba(244, 248, 254, 0.97);
+  flex: 1;
+}
+
+.ar-toolcard-arrow {
+  color: var(--primary);
+  font-size: 0.95rem;
+  opacity: 0.7;
+}
+
+.ar-toolcard:hover .ar-toolcard-arrow { opacity: 1; transform: translateX(2px); }
+
+.ar-toolcard-desc {
+  font-family: var(--font-sans), system-ui, sans-serif;
+  font-style: normal;
+  font-size: 0.85rem;
+  line-height: 1.55;
+  color: rgba(220, 232, 248, 0.7);
+  margin: 0;
+}
+
+/* ---------- Featured tools rail at bottom of article ---------- */
+
+.ar-featured {
+  margin-top: 3rem;
+  padding-top: 1.6rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.ar-featured-title {
+  font-family: var(--font-serif), "Charter", "Georgia", serif;
+  font-style: italic;
+  font-size: 1.3rem;
+  font-weight: 700;
+  margin: 0 0 1rem;
+  color: rgba(244, 248, 254, 0.94);
+}
+
+.ar-featured-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: 0.8rem;
+}
+
+.ar-featured-list .ar-toolcard { margin: 0; }
+
+/* ---------- Related reading at very bottom ---------- */
+
+.ar-related {
+  max-width: 64rem;
+  margin: 3rem 0 0;
+}
+
+.ar-related-title {
+  font-family: var(--font-serif), "Charter", "Georgia", serif;
+  font-style: italic;
+  font-size: 1.4rem;
+  font-weight: 700;
+  margin: 0 0 1.2rem;
+  color: rgba(244, 248, 254, 0.95);
+}
+
+.ar-related-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
+  gap: 1rem;
+}
+
+/* ---------- Mobile tuning ---------- */
+
+@media (max-width: 600px) {
+  .ar-body { font-size: 1.05rem; line-height: 1.7; }
+  .ar-body > p:first-of-type::first-letter {
+    font-size: 3rem;
+    padding-right: 0.5rem;
+    padding-top: 0.35rem;
+  }
+  .ar-body h2 { font-size: 1.45rem; margin: 2rem 0 0.85rem; }
+  .ar-body h3 { font-size: 1.1rem; margin: 1.6rem 0 0.6rem; }
+  .ar-lede { font-size: 1.1rem; }
+  .ar-grid { grid-template-columns: 1fr; gap: 1.2rem; }
+}

@@ -65,6 +65,7 @@ brief.push("Sitemap: " + SITE + "/sitemap.xml");
 brief.push("");
 brief.push("## Curated landing pages");
 brief.push("");
+brief.push("- [Articles](" + SITE + "/articles): long-form editorial picks (Best AI Tools 2026, Hidden Gems, Field Guides)");
 brief.push("- [Legendary AI Tools](" + SITE + "/legendary): industry-defining picks across all categories");
 brief.push("- [Hidden Gem AI Tools](" + SITE + "/hidden-gems): underrated, lesser-known tools worth attention");
 brief.push("- Tag pages at " + SITE + "/tag/<slug>: one URL per shared descriptor across tools");

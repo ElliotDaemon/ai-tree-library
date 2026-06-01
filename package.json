@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "node scripts/fetch-content.mjs && node scripts/build-llms-txt.mjs && node scripts/build-favicon.mjs && next build",
+    "build": "node scripts/fetch-content.mjs && node scripts/fetch-articles.mjs && node scripts/build-llms-txt.mjs && node scripts/build-favicon.mjs && next build",
     "start": "next start",
     "lint": "eslint",
     "fetch-content": "node scripts/fetch-content.mjs",

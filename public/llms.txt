@@ -8,6 +8,7 @@ Sitemap: https://aitreelibrary.com/sitemap.xml
 
 ## Curated landing pages
 
+- [Articles](https://aitreelibrary.com/articles): long-form editorial picks (Best AI Tools 2026, Hidden Gems, Field Guides)
 - [Legendary AI Tools](https://aitreelibrary.com/legendary): industry-defining picks across all categories
 - [Hidden Gem AI Tools](https://aitreelibrary.com/hidden-gems): underrated, lesser-known tools worth attention
 - Tag pages at https://aitreelibrary.com/tag/<slug>: one URL per shared descriptor across tools
@@ -19,4 +20,4 @@ https://aitreelibrary.com/llms-full.txt contains every entry with its long descr
 URL, rarity tier, tags, and category — meant for LLM ingestion.
 
 Curated by Elliot Daemon (https://elliotdaemon.com)
-Last updated: 2026-05-28T17:20:49.532Z
+Last updated: 2026-06-01T02:15:59.629Z
