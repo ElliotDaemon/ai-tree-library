@@ -1,0 +1,31 @@
+# One-shot seed: adds ~135 high-consensus tools from the editorial corpus
+# research to the Notion Library DB. Idempotent — re-runs are safe (matches
+# on URL, fixes any wrong Category relations on existing entries).
+#
+# Trigger: Actions tab → "Seed library from corpus" → Run workflow.
+# Then trigger the regular Enrich descriptions workflow to backfill
+# LongDescription on the new entries (~$0.10 of Claude Haiku).
+
+name: Seed library from corpus
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+      - run: npm ci
+      - name: Run corpus seed
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+        run: node scripts/seed-from-corpus.mjs
