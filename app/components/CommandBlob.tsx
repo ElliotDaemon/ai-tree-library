@@ -6,6 +6,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import Fuse from "fuse.js";
 import type { FilterState } from "./FilterBar";
 
@@ -199,10 +200,9 @@ export default function CommandBlob({
   const handleLeave = () => {
     if (collapseTimer.current) clearTimeout(collapseTimer.current);
     if (query || openMenu || document.activeElement === inputRef.current) return;
-    // Short collapse delay (~CSS duration) so brief cursor exits don't trigger
-    // a full collapse, but the dock doesn't feel sticky. Tuned to match
-    // --blob-dur (0.42s) — slightly under so the morph leads the exit.
-    collapseTimer.current = setTimeout(() => setExpanded(false), 220);
+    // Tight collapse delay — just enough that brief cursor exits don't
+    // trigger a full collapse, but the dock feels responsive.
+    collapseTimer.current = setTimeout(() => setExpanded(false), 140);
   };
   // Touch devices: hover never fires, so tap toggles. On the collapsed pill,
   // tapping anywhere on the core expands. The click-outside listener handles
@@ -318,7 +318,35 @@ export default function CommandBlob({
             onClick={onListOpen}
             title="Open list view"
             tabIndex={expanded ? 0 : -1}
+            aria-label="Open list view"
           >☰</button>
+          <Link
+            href="/articles"
+            className="ne-blob-btn-icon ne-blob-btn-nav"
+            title="Articles"
+            tabIndex={expanded ? 0 : -1}
+            aria-label="Read articles"
+          >
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 4h10a4 4 0 0 1 4 4v12H8a4 4 0 0 1-4-4V4z"/>
+              <path d="M8 9h7"/>
+              <path d="M8 13h7"/>
+              <path d="M8 17h5"/>
+            </svg>
+          </Link>
+          <Link
+            href="/library"
+            className="ne-blob-btn-icon ne-blob-btn-nav"
+            title="Browse all"
+            tabIndex={expanded ? 0 : -1}
+            aria-label="Browse the full library"
+          >
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 5h18"/>
+              <path d="M3 12h18"/>
+              <path d="M3 19h18"/>
+            </svg>
+          </Link>
         </div>
 
         {/* Row 2: Filter pills */}
