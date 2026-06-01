@@ -1,19 +1,30 @@
 // Article data loaders. Reads public/articles.json (built by
-// scripts/fetch-articles.mjs). Same React.cache pattern as lib/library.ts
-// so multiple components on a single render share one filesystem read.
+// scripts/fetch-articles.mjs).
 
 import { promises as fs } from "node:fs";
 import { join } from "node:path";
 import { cache } from "react";
 
+export interface RichSegment {
+  text: string;
+  bold?: boolean;
+  italic?: boolean;
+  code?: boolean;
+  link?: string;
+}
+
 export type ArticleBlock =
-  | { type: "p"; text: string }
-  | { type: "h"; level: 1 | 2 | 3; text: string }
-  | { type: "ul"; items: string[] }
-  | { type: "ol"; items: string[] }
-  | { type: "quote"; text: string }
+  | { type: "p"; segments: RichSegment[] }
+  | { type: "h"; level: 1 | 2 | 3; segments: RichSegment[] }
+  | { type: "ul"; items: RichSegment[][] }
+  | { type: "ol"; items: RichSegment[][] }
+  | { type: "quote"; segments: RichSegment[] }
+  | { type: "callout"; emoji: string; segments: RichSegment[] }
+  | { type: "code"; language: string; text: string }
+  | { type: "img"; url: string; caption?: RichSegment[]; alt?: string }
+  | { type: "table"; headers: RichSegment[][] | null; rows: RichSegment[][][] }
   | { type: "hr" }
-  | { type: "tool"; slug: string; name: string; description: string };
+  | { type: "tool"; slug: string; name: string; description: string; pricing?: string; rarity?: string };
 
 export interface Article {
   id: string;
@@ -58,14 +69,12 @@ export async function findArticleBySlug(slug: string): Promise<Article | null> {
   return f.articles.find((a) => a.slug === slug) ?? null;
 }
 
-/** Articles whose Featured Tools relation includes the given library entry id. */
 export async function articlesFeaturingTool(toolId: string): Promise<Article[]> {
   const f = await loadArticles();
   if (!f) return [];
   return f.articles.filter((a) => a.featuredToolIds.includes(toolId));
 }
 
-/** Articles sharing 1+ tags with the given article, excluding self. */
 export async function relatedArticles(article: Article, n = 4): Promise<Article[]> {
   const f = await loadArticles();
   if (!f) return [];
@@ -79,7 +88,6 @@ export async function relatedArticles(article: Article, n = 4): Promise<Article[
     .map((x) => x.a);
 }
 
-/** Pretty date for byline strip — "May 28, 2026" */
 export function formatArticleDate(iso: string | null): string {
   if (!iso) return "";
   try {
