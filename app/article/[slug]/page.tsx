@@ -133,6 +133,20 @@ export default async function ArticlePage({ params }: PageProps) {
         </header>
 
         <article className="ar-article">
+          {/* Hero image — references the same route as the OG image so it's
+              rendered once, cached at the edge, and identical to the social
+              share preview. Each article has its own unique constellation
+              seeded by id, tinted by coverTint. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            className="ar-hero"
+            src={`/article/${article.slug}/opengraph-image`}
+            alt={article.title}
+            width={1200}
+            height={630}
+            loading="eager"
+          />
+
           <div className="ar-eyebrow">
             <Link href="/articles" style={{ color: accent }}>Articles</Link>
             {article.tags.slice(0, 2).map((t) => (

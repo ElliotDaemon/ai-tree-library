@@ -2924,6 +2924,30 @@ body:has(.tp-page), body:has(.cp-page), body:has(.legal-page) {
   padding: 0 1.5rem;
 }
 
+/* Hero image at the top of each article. Same PNG that's served as the
+   OG / social-share card — single source of truth. Goes slightly wider
+   than the article body to feel like a magazine hero, then the prose
+   tightens below it. */
+.ar-hero {
+  display: block;
+  width: 100%;
+  max-width: 48rem;
+  margin: 0 auto 2rem;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5), 0 0 60px rgba(0, 243, 255, 0.04);
+  background: #030508;
+  aspect-ratio: 1200 / 630;
+  object-fit: cover;
+}
+
+@media (max-width: 720px) {
+  .ar-hero {
+    border-radius: 10px;
+    margin-bottom: 1.4rem;
+  }
+}
+
 .ar-eyebrow {
   display: flex;
   align-items: baseline;
