@@ -36,6 +36,9 @@ export interface Article {
   updatedDate: string | null;
   excerpt: string;
   coverTint: string;
+  /** Custom hero image (URL or uploaded asset). When null/empty the
+   *  article falls back to the auto-generated /article/[slug]/opengraph-image. */
+  heroImageUrl?: string | null;
   tags: string[];
   featuredToolIds: string[];
   readingTimeMinutes: number;

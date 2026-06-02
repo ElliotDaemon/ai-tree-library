@@ -38,6 +38,11 @@ export interface DashboardArticle {
   excerpt: string;
   publishedDate: string | null;
   readingTimeMinutes: number;
+  /** Custom hero URL (Notion "Hero Image URL" field). Empty/missing
+   *  means the article falls back to the auto-generated OG image. */
+  heroImageUrl: string | null;
+  coverTint: string;
+  tags: string[];
 }
 
 export interface DashboardData {
@@ -204,6 +209,9 @@ async function fetchArticlesData(): Promise<{ count: number; items: DashboardArt
         excerpt: string;
         publishedDate: string | null;
         readingTimeMinutes: number;
+        heroImageUrl?: string | null;
+        coverTint?: string;
+        tags?: string[];
       }>;
     };
     const arr = parsed.articles ?? [];
@@ -217,6 +225,9 @@ async function fetchArticlesData(): Promise<{ count: number; items: DashboardArt
         excerpt: a.excerpt,
         publishedDate: a.publishedDate,
         readingTimeMinutes: a.readingTimeMinutes,
+        heroImageUrl: a.heroImageUrl ?? null,
+        coverTint: a.coverTint ?? "cyan",
+        tags: a.tags ?? [],
       })),
     };
   } catch {

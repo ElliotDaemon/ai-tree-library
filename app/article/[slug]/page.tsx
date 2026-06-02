@@ -61,11 +61,18 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
       ...(article.publishedDate ? { publishedTime: article.publishedDate } : {}),
       ...(article.updatedDate ? { modifiedTime: article.updatedDate } : {}),
       tags: article.tags,
+      // When the editor sets a custom Hero Image URL via the portal,
+      // social shares should use it too — otherwise Next picks up the
+      // auto-generated /article/[slug]/opengraph-image route by convention.
+      ...(article.heroImageUrl
+        ? { images: [{ url: article.heroImageUrl, width: 1200, height: 630, alt: article.title }] }
+        : {}),
     },
     twitter: {
       card: "summary_large_image",
       title: article.title,
       description,
+      ...(article.heroImageUrl ? { images: [article.heroImageUrl] } : {}),
     },
   };
 }
@@ -133,14 +140,14 @@ export default async function ArticlePage({ params }: PageProps) {
         </header>
 
         <article className="ar-article">
-          {/* Hero image — references the same route as the OG image so it's
-              rendered once, cached at the edge, and identical to the social
-              share preview. Each article has its own unique constellation
-              seeded by id, tinted by coverTint. */}
+          {/* Hero image — if the article has a custom Hero Image URL set
+              (via the portal), use that. Otherwise fall back to the auto-
+              generated constellation OG image, which doubles as the social
+              share preview and is cached at the edge. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             className="ar-hero"
-            src={`/article/${article.slug}/opengraph-image`}
+            src={article.heroImageUrl || `/article/${article.slug}/opengraph-image`}
             alt={article.title}
             width={1200}
             height={630}

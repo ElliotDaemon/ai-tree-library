@@ -21,6 +21,7 @@
     "@react-three/fiber": "^9.6.1",
     "@react-three/postprocessing": "^3.0.4",
     "@vercel/analytics": "^2.0.1",
+    "@vercel/blob": "^2.4.0",
     "@vercel/speed-insights": "^2.0.0",
     "d3-force-3d": "^3.0.5",
     "fuse.js": "^7.3.0",

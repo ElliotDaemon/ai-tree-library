@@ -510,13 +510,14 @@ function EntryListPanel({
 }
 
 function ArticlesPanel({ articles }: { articles: DashboardArticle[] }) {
+  const [expanded, setExpanded] = useState<string | null>(null);
   return (
     <section className="pv-section pv-panel">
       <div className="pv-panel-head">
         <div>
           <div className="pv-panel-title">Articles</div>
           <div className="pv-panel-sub">
-            {articles.length} published · edit in Notion
+            {articles.length} published · click to edit
           </div>
         </div>
       </div>
@@ -525,25 +526,234 @@ function ArticlesPanel({ articles }: { articles: DashboardArticle[] }) {
       ) : (
         <div className="pv-table pv-table-dense">
           {articles.map((a) => (
-            <div className="pv-row pv-row-dense" key={a.id}>
-              <div className="pv-row-main">
-                <Link href={`/article/${a.slug}`} target="_blank" rel="noopener noreferrer" className="pv-row-name pv-row-name-link">
-                  {a.title}
-                </Link>
-                <span className="pv-row-host pv-row-host-internal">
-                  {SITE}/article/{a.slug}
-                </span>
-              </div>
-              <div className="pv-row-meta">
-                {a.publishedDate ? <span>{a.publishedDate.slice(0, 10)}</span> : null}
-                <span className="pv-sep">·</span>
-                <span>{a.readingTimeMinutes} min</span>
-              </div>
-            </div>
+            <ArticleRow
+              key={a.id}
+              article={a}
+              isExpanded={expanded === a.id}
+              onToggle={() => setExpanded(expanded === a.id ? null : a.id)}
+            />
           ))}
         </div>
       )}
     </section>
+  );
+}
+
+function ArticleRow({
+  article,
+  isExpanded,
+  onToggle,
+}: {
+  article: DashboardArticle;
+  isExpanded: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <div className={`pv-row pv-row-dense pv-row-collapsible ${isExpanded ? "pv-row-expanded" : ""}`}>
+      <button type="button" className="pv-row-header" onClick={onToggle} aria-expanded={isExpanded}>
+        <div className="pv-row-main">
+          <span className="pv-row-name">{article.title}</span>
+          <span className="pv-row-host pv-row-host-internal">
+            {SITE}/article/{article.slug}
+          </span>
+        </div>
+        <div className="pv-row-meta">
+          {article.heroImageUrl ? (
+            <span className="pv-pill pv-pill-good" title={article.heroImageUrl}>
+              hero set
+            </span>
+          ) : (
+            <span className="pv-pill">auto hero</span>
+          )}
+          {article.publishedDate ? <span>{article.publishedDate.slice(0, 10)}</span> : null}
+          <span className="pv-sep">·</span>
+          <span>{article.readingTimeMinutes} min</span>
+          <span className="pv-row-caret">{isExpanded ? "−" : "+"}</span>
+        </div>
+      </button>
+      {isExpanded ? <ArticleEditor article={article} /> : null}
+    </div>
+  );
+}
+
+const TINT_OPTIONS = ["cyan", "purple", "pink", "gold"] as const;
+
+function ArticleEditor({ article }: { article: DashboardArticle }) {
+  const [title, setTitle] = useState(article.title);
+  const [excerpt, setExcerpt] = useState(article.excerpt);
+  const [coverTint, setCoverTint] = useState(article.coverTint || "cyan");
+  const [heroUrl, setHeroUrl] = useState(article.heroImageUrl ?? "");
+  const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+
+  const dirty =
+    title !== article.title ||
+    excerpt !== article.excerpt ||
+    coverTint !== (article.coverTint || "cyan") ||
+    (heroUrl || null) !== (article.heroImageUrl || null);
+
+  async function handleUpload(file: File) {
+    setUploading(true);
+    setMsg(null);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("slug", article.slug);
+      const res = await fetch("/api/portal/upload-image", { method: "POST", body: form });
+      const json = (await res.json()) as { ok: boolean; url?: string; error?: string };
+      if (!json.ok || !json.url) throw new Error(json.error || "upload failed");
+      setHeroUrl(json.url);
+      setMsg({ kind: "ok", text: "Uploaded. Click Save to apply." });
+    } catch (e) {
+      setMsg({ kind: "err", text: (e as Error).message });
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    setMsg(null);
+    try {
+      const fields: Record<string, unknown> = {};
+      if (title !== article.title) fields.title = title;
+      if (excerpt !== article.excerpt) fields.excerpt = excerpt;
+      if (coverTint !== (article.coverTint || "cyan")) fields.coverTint = coverTint;
+      if ((heroUrl || null) !== (article.heroImageUrl || null)) {
+        fields.heroImageUrl = heroUrl.trim() || null;
+      }
+      const res = await fetch("/api/portal/update-article", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id: article.id, fields }),
+      });
+      const json = (await res.json()) as { ok: boolean; error?: string };
+      if (!json.ok) throw new Error(json.error || "save failed");
+      setMsg({ kind: "ok", text: "Saved to Notion. Next deploy will rebuild the article page." });
+    } catch (e) {
+      setMsg({ kind: "err", text: (e as Error).message });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function clearHero() {
+    setHeroUrl("");
+    setMsg({ kind: "ok", text: "Hero cleared. Click Save to revert to auto-generated image." });
+  }
+
+  return (
+    <div className="pv-article-editor">
+      <div className="pv-form-grid">
+        <label className="pv-field pv-field-wide">
+          <span className="pv-field-label">Title</span>
+          <input
+            type="text"
+            className="pv-input"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            disabled={saving}
+          />
+        </label>
+
+        <label className="pv-field pv-field-wide">
+          <span className="pv-field-label">Excerpt</span>
+          <textarea
+            className="pv-input pv-textarea"
+            value={excerpt}
+            onChange={(e) => setExcerpt(e.target.value)}
+            rows={2}
+            disabled={saving}
+            placeholder="Short summary for cards + meta description"
+          />
+        </label>
+
+        <label className="pv-field">
+          <span className="pv-field-label">Cover tint</span>
+          <select
+            className="pv-input pv-select"
+            value={coverTint}
+            onChange={(e) => setCoverTint(e.target.value)}
+            disabled={saving}
+          >
+            {TINT_OPTIONS.map((t) => (
+              <option key={t} value={t}>{t}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <div className="pv-hero-editor">
+        <div className="pv-hero-label">Hero image</div>
+        <div className="pv-hero-preview">
+          {heroUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={heroUrl} alt="" />
+          ) : (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={`/article/${article.slug}/opengraph-image`} alt="auto-generated hero" />
+          )}
+          {!heroUrl ? <span className="pv-hero-overlay">AUTO-GENERATED</span> : null}
+        </div>
+        <div className="pv-hero-controls">
+          <input
+            type="url"
+            className="pv-input"
+            placeholder="Paste image URL (https://…)"
+            value={heroUrl}
+            onChange={(e) => setHeroUrl(e.target.value)}
+            disabled={saving || uploading}
+          />
+          <label className={`pv-upload-btn ${uploading ? "pv-upload-btn-disabled" : ""}`}>
+            {uploading ? "Uploading…" : "Upload"}
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/avif,image/gif"
+              hidden
+              disabled={saving || uploading}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) handleUpload(f);
+                e.target.value = "";
+              }}
+            />
+          </label>
+          {heroUrl ? (
+            <button type="button" className="pv-btn pv-btn-ghost" onClick={clearHero} disabled={saving}>
+              Clear
+            </button>
+          ) : null}
+        </div>
+        <div className="pv-hint">
+          Paste any image URL or upload (JPG/PNG/WebP/AVIF/GIF, max 8 MB). 1200×630 looks best.
+          Uploads require BLOB_READ_WRITE_TOKEN on Vercel; URL paste works without it.
+        </div>
+      </div>
+
+      <div className="pv-actions">
+        <Link
+          href={`/article/${article.slug}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="pv-btn pv-btn-ghost"
+        >
+          View live ↗
+        </Link>
+        <button
+          type="button"
+          className="pv-btn pv-btn-primary"
+          onClick={handleSave}
+          disabled={!dirty || saving || uploading}
+        >
+          {saving ? "Saving…" : dirty ? "Save to Notion" : "No changes"}
+        </button>
+      </div>
+
+      {msg ? (
+        <div className={`pv-msg pv-msg-${msg.kind}`}>{msg.text}</div>
+      ) : null}
+    </div>
   );
 }
 

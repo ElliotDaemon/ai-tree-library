@@ -383,6 +383,9 @@ for (const row of rows) {
     updatedDate: row.properties["Updated Date"]?.date?.start || null,
     excerpt: text(row.properties.Excerpt),
     coverTint: sel(row.properties["Cover Tint"]) || "cyan",
+    // Custom hero (URL or uploaded asset). Renders in place of the
+    // auto-generated /article/[slug]/opengraph-image when present.
+    heroImageUrl: row.properties["Hero Image URL"]?.url || null,
     tags: multi(row.properties.Tags),
     featuredToolIds: (row.properties["Featured Tools"]?.relation ?? []).map((r) => r.id),
     readingTimeMinutes,
