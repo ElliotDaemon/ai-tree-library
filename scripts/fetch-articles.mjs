@@ -34,7 +34,11 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const OUTPUT = join(__dirname, "..", "public", "articles.json");
 const LIBRARY_JSON = join(__dirname, "..", "public", "library.json");
 
-const ARTICLES_DS = "be09af06-bca2-44b6-9d28-c61b084063e5";
+// Database id (NOT the data-source / collection id). The collection id
+// "be09af06-…" had been used previously and always 404'd because
+// notion.databases.query expects the parent database id. That's why
+// articles.json shipped empty for so long.
+const ARTICLES_DS = "c660f7d8-54fe-47e1-be42-61e775e744b8";
 
 const token = process.env.NOTION_TOKEN;
 if (!token) {

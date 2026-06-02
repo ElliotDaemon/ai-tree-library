@@ -12,7 +12,11 @@
 
 import { Client } from "@notionhq/client";
 
-const ARTICLES_DS = "be09af06-bca2-44b6-9d28-c61b084063e5";
+// Notion's `databases.query` and `pages.create({ parent: { database_id } })`
+// want the DATABASE id, not the data-source / collection id. The collection
+// id (be09af06-…) was what we had previously — it always 404s because no
+// such "database" exists. Real DB id is the parent of that collection.
+const ARTICLES_DB = "c660f7d8-54fe-47e1-be42-61e775e744b8";
 
 const token = process.env.NOTION_TOKEN;
 if (!token) { console.error("[seed-articles] NOTION_TOKEN missing"); process.exit(1); }
@@ -985,7 +989,7 @@ console.log("[seed-articles] Fetching existing articles for dedupe...");
 const existing = new Map(); // slug -> page id
 let cursor;
 do {
-  const res = await notion.databases.query({ database_id: ARTICLES_DS, start_cursor: cursor, page_size: 100 });
+  const res = await notion.databases.query({ database_id: ARTICLES_DB, start_cursor: cursor, page_size: 100 });
   for (const r of res.results) {
     const slug = (r.properties.Slug?.rich_text ?? []).map((s) => s.plain_text).join("").trim();
     if (slug) existing.set(slug, r.id);
@@ -1008,7 +1012,7 @@ for (const article of articles) {
 
   // Create new page
   const created = await notion.pages.create({
-    parent: { database_id: ARTICLES_DS },
+    parent: { database_id: ARTICLES_DB },
     properties: {
       Title: { title: [{ text: { content: article.title } }] },
       Slug: { rich_text: [{ text: { content: article.slug } }] },
