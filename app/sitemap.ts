@@ -18,7 +18,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${SITE}/terms`, lastModified: lastMod, changeFrequency: "yearly", priority: 0.3 },
   ];
 
-  // Articles — highest-priority editorial pages
+  // Articles — highest-priority editorial pages. Including image refs
+  // gives Google Images something to discover for each piece.
   if (articlesFile) {
     for (const a of articlesFile.articles) {
       out.push({
@@ -26,6 +27,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         lastModified: a.updatedDate ?? a.publishedDate ?? lastMod,
         changeFrequency: "monthly",
         priority: 0.85,
+        images: [a.heroImageUrl || `${SITE}/article/${a.slug}/opengraph-image`],
       });
     }
   }
@@ -40,13 +42,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         priority: 0.8,
       });
     }
-    // Every entry
+    // Every entry — per-tool OG image is auto-generated at /[slug]/opengraph-image
     for (const e of lib.entries) {
       out.push({
         url: `${SITE}/${e.slug}`,
         lastModified: lastMod,
         changeFrequency: "weekly",
         priority: e.featured ? 0.7 : 0.6,
+        images: [`${SITE}/${e.slug}/opengraph-image`],
       });
     }
     // Every tag (long-tail SEO surface)

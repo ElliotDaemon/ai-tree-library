@@ -59,7 +59,22 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     title: `${article.title} — AI Tree Library`,
     description,
     alternates: { canonical: `/article/${article.slug}` },
-    authors: [{ name: article.author }],
+    authors: [{ name: article.author, url: "https://elliotdaemon.com" }],
+    creator: article.author,
+    publisher: "AI Tree Library",
+    keywords: article.tags.length > 0 ? article.tags : undefined,
+    category: article.tags[0],
+    robots: {
+      index: true,
+      follow: true,
+      googleBot: {
+        index: true,
+        follow: true,
+        "max-image-preview": "large",
+        "max-snippet": -1,
+        "max-video-preview": -1,
+      },
+    },
     openGraph: {
       title: article.title,
       description,
@@ -113,32 +128,95 @@ export default async function ArticlePage({ params }: PageProps) {
 
   return (
     <>
+      {/* JSON-LD graph: BlogPosting (richer than Article — gets blog
+          treatment in Google), Person author with sameAs, Organization
+          publisher with logo (required for Google to surface in news/
+          discover), BreadcrumbList (powers the breadcrumb trail in
+          search results), and ItemList of mentioned tools (helps with
+          "Tools mentioned in:" entity-rich snippets). */}
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
           __html: JSON.stringify({
             "@context": "https://schema.org",
-            "@type": "Article",
-            headline: article.title,
-            description: article.excerpt || article.title,
-            author: { "@type": "Person", name: article.author },
-            datePublished: article.publishedDate ?? undefined,
-            dateModified: article.updatedDate ?? article.publishedDate ?? undefined,
-            url: `${SITE}/article/${article.slug}`,
-            isPartOf: { "@type": "WebSite", name: "AI Tree Library", url: SITE },
-            keywords: article.tags.join(", "),
-            wordCount: article.wordCount,
-            ...(featuredTools.length > 0
-              ? {
-                  mentions: featuredTools.map((t) => ({
-                    "@type": "SoftwareApplication",
-                    name: t.name,
-                    url: `${SITE}/${t.slug}`,
-                  })),
-                }
-              : {}),
+            "@graph": [
+              {
+                "@type": "BlogPosting",
+                "@id": `${SITE}/article/${article.slug}#article`,
+                headline: article.title,
+                description: article.excerpt || article.title,
+                articleBody: undefined, // Long; let crawlers read the page
+                inLanguage: "en",
+                url: `${SITE}/article/${article.slug}`,
+                mainEntityOfPage: `${SITE}/article/${article.slug}`,
+                image: article.heroImageUrl
+                  ? [article.heroImageUrl]
+                  : [`${SITE}/article/${article.slug}/opengraph-image`],
+                datePublished: article.publishedDate ?? undefined,
+                dateModified: article.updatedDate ?? article.publishedDate ?? undefined,
+                author: {
+                  "@type": "Person",
+                  "@id": "https://elliotdaemon.com/#person",
+                  name: article.author,
+                  url: "https://elliotdaemon.com",
+                  sameAs: ["https://elliotdaemon.com", "https://x.com/elliotdaemon"],
+                },
+                publisher: {
+                  "@type": "Organization",
+                  "@id": `${SITE}/#organization`,
+                  name: "AI Tree Library",
+                  url: SITE,
+                  logo: {
+                    "@type": "ImageObject",
+                    url: `${SITE}/apple-touch-icon.png`,
+                    width: 180,
+                    height: 180,
+                  },
+                },
+                isPartOf: {
+                  "@type": "Blog",
+                  "@id": `${SITE}/articles#blog`,
+                  name: "AI Tree Library Articles",
+                  url: `${SITE}/articles`,
+                },
+                keywords: article.tags.length > 0 ? article.tags.join(", ") : undefined,
+                articleSection: article.tags[0] ?? undefined,
+                wordCount: article.wordCount,
+                timeRequired: `PT${article.readingTimeMinutes}M`,
+                ...(featuredTools.length > 0
+                  ? {
+                      mentions: featuredTools.map((t) => ({
+                        "@type": "SoftwareApplication",
+                        name: t.name,
+                        url: `${SITE}/${t.slug}`,
+                        applicationCategory: "AI",
+                      })),
+                    }
+                  : {}),
+              },
+              {
+                "@type": "BreadcrumbList",
+                itemListElement: [
+                  { "@type": "ListItem", position: 1, name: "Home", item: SITE },
+                  { "@type": "ListItem", position: 2, name: "Articles", item: `${SITE}/articles` },
+                  { "@type": "ListItem", position: 3, name: article.title, item: `${SITE}/article/${article.slug}` },
+                ],
+              },
+            ],
           }),
         }}
+      />
+
+      {/* Preload the hero — it's the LCP element on the article page.
+          Without this, browsers fetch it lazily on parse and LCP can
+          be 1-2s slower on a cold cache. fetchpriority="high" tells
+          the browser to deprioritise other resources for it. */}
+      {/* eslint-disable-next-line @next/next/no-head-element */}
+      <link
+        rel="preload"
+        as="image"
+        fetchPriority="high"
+        href={article.heroImageUrl || `/article/${article.slug}/opengraph-image`}
       />
 
       <main className="cp-page">
@@ -161,6 +239,7 @@ export default async function ArticlePage({ params }: PageProps) {
             width={1200}
             height={630}
             loading="eager"
+            fetchPriority="high"
           />
 
           <div className="ar-eyebrow">

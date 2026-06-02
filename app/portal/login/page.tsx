@@ -13,7 +13,6 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import {
   SESSION_COOKIE,
-  getAdminUser,
   isAdminConfigured,
   verifySession,
 } from "@/lib/portal-auth";
@@ -27,7 +26,7 @@ export const metadata: Metadata = {
 // Always render fresh — never cache the login page
 export const dynamic = "force-dynamic";
 
-type SP = Promise<{ from?: string; error?: string }>;
+type SP = Promise<{ from?: string; error?: string; retry?: string }>;
 
 function safeReturn(from: string | undefined): string {
   if (!from) return "/portal";
@@ -37,8 +36,9 @@ function safeReturn(from: string | undefined): string {
 }
 
 export default async function PortalLoginPage({ searchParams }: { searchParams: SP }) {
-  const { from, error } = await searchParams;
+  const { from, error, retry } = await searchParams;
   const target = safeReturn(from);
+  const lockedFor = error === "locked" ? Math.max(1, Number(retry) || 15) : null;
 
   // Already logged in? Skip the form.
   const cookieStore = await cookies();
@@ -48,7 +48,6 @@ export default async function PortalLoginPage({ searchParams }: { searchParams: 
   }
 
   const configured = isAdminConfigured();
-  const defaultUser = getAdminUser();
 
   return (
     <main className="pl-page">
@@ -68,10 +67,19 @@ export default async function PortalLoginPage({ searchParams }: { searchParams: 
           </p>
         ) : null}
 
-        {error === "1" ? <p className="pl-error">Invalid username or password.</p> : null}
+        {lockedFor !== null ? (
+          <p className="pl-error">
+            Too many failed attempts from your IP. Try again in ~{lockedFor} min.
+          </p>
+        ) : error === "1" ? (
+          <p className="pl-error">Invalid username or password.</p>
+        ) : null}
 
         <label className="pl-field">
           <span>Username</span>
+          {/* No defaultValue — leaving the field empty means password
+              managers populate it from a saved credential instead of
+              the visible "admin" hint sitting there for anyone to see. */}
           <input
             type="text"
             name="username"
@@ -79,7 +87,6 @@ export default async function PortalLoginPage({ searchParams }: { searchParams: 
             autoCapitalize="none"
             autoCorrect="off"
             spellCheck={false}
-            defaultValue={defaultUser}
             required
             disabled={!configured}
           />

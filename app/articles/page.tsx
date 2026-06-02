@@ -37,26 +37,61 @@ export default async function ArticlesIndexPage() {
 
   return (
     <>
+      {/* Graph: Blog (signals editorial site to Google + makes it
+          eligible for News/Discover features) + BreadcrumbList +
+          ItemList of all articles for rich-result rendering. */}
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{
           __html: JSON.stringify({
             "@context": "https://schema.org",
-            "@type": "CollectionPage",
-            name: "Articles — AI Tree Library",
-            description: "Curated long-form articles on AI tools and the creative tech landscape.",
-            url: `${SITE}/articles`,
-            isPartOf: { "@type": "WebSite", name: "AI Tree Library", url: SITE },
-            mainEntity: {
-              "@type": "ItemList",
-              numberOfItems: articles.length,
-              itemListElement: articles.map((a, i) => ({
-                "@type": "ListItem",
-                position: i + 1,
-                url: `${SITE}/article/${a.slug}`,
-                name: a.title,
-              })),
-            },
+            "@graph": [
+              {
+                "@type": "Blog",
+                "@id": `${SITE}/articles#blog`,
+                name: "AI Tree Library Articles",
+                description:
+                  "Curated long-form articles on AI tools, image generators, coding assistants, design platforms, and the broader creative tech landscape.",
+                url: `${SITE}/articles`,
+                inLanguage: "en",
+                publisher: {
+                  "@type": "Organization",
+                  "@id": `${SITE}/#organization`,
+                  name: "AI Tree Library",
+                  url: SITE,
+                  logo: { "@type": "ImageObject", url: `${SITE}/apple-touch-icon.png` },
+                },
+                blogPost: articles.map((a) => ({
+                  "@type": "BlogPosting",
+                  "@id": `${SITE}/article/${a.slug}#article`,
+                  headline: a.title,
+                  url: `${SITE}/article/${a.slug}`,
+                  datePublished: a.publishedDate ?? undefined,
+                  dateModified: a.updatedDate ?? a.publishedDate ?? undefined,
+                  author: { "@type": "Person", name: a.author },
+                  image: a.heroImageUrl
+                    ? [a.heroImageUrl]
+                    : [`${SITE}/article/${a.slug}/opengraph-image`],
+                })),
+              },
+              {
+                "@type": "BreadcrumbList",
+                itemListElement: [
+                  { "@type": "ListItem", position: 1, name: "Home", item: SITE },
+                  { "@type": "ListItem", position: 2, name: "Articles", item: `${SITE}/articles` },
+                ],
+              },
+              {
+                "@type": "ItemList",
+                numberOfItems: articles.length,
+                itemListElement: articles.map((a, i) => ({
+                  "@type": "ListItem",
+                  position: i + 1,
+                  url: `${SITE}/article/${a.slug}`,
+                  name: a.title,
+                })),
+              },
+            ],
           }),
         }}
       />
