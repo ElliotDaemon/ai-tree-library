@@ -3289,34 +3289,77 @@ body:has(.tp-page), body:has(.cp-page), body:has(.legal-page) {
 
 /* ---------- Single article (/article/[slug]) ---------- */
 
+/* Article wrapper. Body prose is locked to ~42rem (≈ 70ch) for serif
+   readability, but the hero spills wider via its own max-width below.
+   Padding scales down on smaller screens via the trailing breakpoints. */
 .ar-article {
   max-width: 42rem;
   margin: 1.5rem auto 3rem;
   padding: 0 1.5rem;
 }
 
-/* Hero image at the top of each article. Same PNG that's served as the
-   OG / social-share card — single source of truth. Goes slightly wider
-   than the article body to feel like a magazine hero, then the prose
-   tightens below it. */
+/* Hero image: locked 16:9 frame (matches 1200×630 OG ratio) so any
+   uploaded aspect ratio fills cleanly via object-fit: cover. The image
+   goes wider than the prose for editorial impact, then scales down
+   continuously on smaller viewports — no rigid breakpoints needed.
+   Capped at 64rem on huge displays so it doesn't dominate. */
 .ar-hero {
   display: block;
   width: 100%;
-  max-width: 48rem;
-  margin: 0 auto 2rem;
-  border-radius: 16px;
+  /* On wide screens the hero pulls outside the article wrapper so it
+     reads as a magazine hero. clamp() keeps the upper bound sane. */
+  max-width: min(64rem, 92vw);
+  margin: 0 auto 2.2rem;
+  border-radius: 18px;
   border: 1px solid rgba(255, 255, 255, 0.06);
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5), 0 0 60px rgba(0, 243, 255, 0.04);
   background: #030508;
   aspect-ratio: 1200 / 630;
   object-fit: cover;
+  object-position: center;
+}
+
+/* On the article-page level, the wrapper itself pulls wider on desktop
+   so the hero has room to breathe. The body prose stays narrow via
+   its own .ar-body max-width below — best of both. */
+@media (min-width: 960px) {
+  .ar-article { max-width: 64rem; padding: 0 2rem; }
+  .ar-hero { max-width: 100%; margin-bottom: 2.6rem; }
+}
+
+@media (min-width: 1280px) {
+  .ar-article { max-width: 68rem; padding: 0 2.5rem; }
 }
 
 @media (max-width: 720px) {
+  .ar-article { padding: 0 1.1rem; margin-top: 1rem; }
   .ar-hero {
-    border-radius: 10px;
+    border-radius: 12px;
     margin-bottom: 1.4rem;
+    /* Slightly taller aspect on mobile so portraits feel less cramped. */
+    aspect-ratio: 16 / 10;
   }
+}
+
+@media (max-width: 480px) {
+  .ar-article { padding: 0 0.9rem; }
+  .ar-hero { border-radius: 10px; aspect-ratio: 4 / 3; }
+}
+
+/* Eyebrow + title + lede + byline all stay locked to the reading
+   column (≈ 42rem) even when the wrapper widens for the hero. This
+   keeps the editorial rhythm consistent on big screens — only the
+   hero image and footnote rails break out wider. */
+.ar-eyebrow,
+.ar-title,
+.ar-lede,
+.ar-byline,
+.ar-body,
+.ar-featured,
+.ar-related {
+  max-width: 42rem;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .ar-eyebrow {
@@ -3338,10 +3381,10 @@ body:has(.tp-page), body:has(.cp-page), body:has(.legal-page) {
 .ar-title {
   font-family: var(--font-serif), "Charter", "Georgia", serif;
   font-weight: 700;
-  font-size: clamp(2.4rem, 6.5vw, 3.8rem);
+  font-size: clamp(2.1rem, 5.5vw, 3.6rem);
   letter-spacing: -0.025em;
   line-height: 1.06;
-  margin: 0 0 1.2rem 0;
+  margin: 0 auto 1.2rem;
   color: rgba(244, 248, 254, 0.97);
 }
 
@@ -3349,10 +3392,10 @@ body:has(.tp-page), body:has(.cp-page), body:has(.legal-page) {
   font-family: var(--font-serif), "Charter", "Georgia", serif;
   font-style: italic;
   font-weight: 400;
-  font-size: 1.25rem;
+  font-size: clamp(1.05rem, 2.2vw, 1.3rem);
   color: rgba(220, 232, 248, 0.8);
   line-height: 1.55;
-  margin: 0 0 1.8rem 0;
+  margin: 0 auto 1.8rem;
 }
 
 .ar-byline {
@@ -3363,7 +3406,7 @@ body:has(.tp-page), body:has(.cp-page), body:has(.legal-page) {
   padding: 0.9rem 0;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  margin-bottom: 2rem;
+  margin: 0 auto 2rem;
   font-size: 0.78rem;
   color: rgba(180, 200, 220, 0.65);
   letter-spacing: 0.03em;
@@ -3376,7 +3419,8 @@ body:has(.tp-page), body:has(.cp-page), body:has(.legal-page) {
 
 .ar-body {
   font-family: var(--font-serif), "Charter", "Georgia", serif;
-  font-size: 1.1rem;
+  /* Fluid type: 1.02rem on phones, 1.12rem on desktop, smooth in between. */
+  font-size: clamp(1.02rem, 0.95rem + 0.35vw, 1.15rem);
   line-height: 1.78;
   color: rgba(220, 232, 248, 0.86);
 }
@@ -3743,7 +3787,7 @@ body:has(.tp-page), body:has(.cp-page), body:has(.legal-page) {
 /* ---------- Mobile tuning ---------- */
 
 @media (max-width: 600px) {
-  .ar-body { font-size: 1.05rem; line-height: 1.7; }
+  .ar-body { line-height: 1.7; }
   .ar-body > p:first-of-type::first-letter {
     font-size: 3rem;
     padding-right: 0.5rem;
@@ -3751,8 +3795,23 @@ body:has(.tp-page), body:has(.cp-page), body:has(.legal-page) {
   }
   .ar-body h2 { font-size: 1.45rem; margin: 2rem 0 0.85rem; }
   .ar-body h3 { font-size: 1.1rem; margin: 1.6rem 0 0.6rem; }
-  .ar-lede { font-size: 1.1rem; }
+  .ar-body blockquote { font-size: 1.05rem; padding-left: 1rem; }
+  .ar-body ul, .ar-body ol { margin-left: 1.2rem; }
   .ar-grid { grid-template-columns: 1fr; gap: 1.2rem; }
+  .ar-byline { font-size: 0.74rem; }
+}
+
+/* Tablet / small laptop — body type grows slightly, headers breathe more. */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .ar-body h2 { font-size: 1.85rem; margin: 2.8rem 0 1rem; }
+  .ar-body h3 { font-size: 1.32rem; margin: 2.1rem 0 0.75rem; }
+}
+
+/* Large laptop / desktop — comfortable serif body, bigger headers. */
+@media (min-width: 1024px) {
+  .ar-body h2 { font-size: 1.95rem; line-height: 1.2; margin: 3rem 0 1.1rem; }
+  .ar-body h3 { font-size: 1.38rem; margin: 2.3rem 0 0.8rem; }
+  .ar-body blockquote { font-size: 1.28rem; padding-left: 1.6rem; }
 }
 
 /* ===== Portal article editor (Hero image + inline field editing) ===== */

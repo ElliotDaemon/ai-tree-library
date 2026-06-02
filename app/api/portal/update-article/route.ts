@@ -28,8 +28,10 @@
 // project.
 
 import { NextResponse } from "next/server";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { Client } from "@notionhq/client";
 import { verifySession, SESSION_COOKIE } from "@/lib/portal-auth";
+import { writeOverlay, ARTICLE_OVERLAY_TAG, type ArticleOverlay } from "@/lib/article-overlay";
 
 export const runtime = "nodejs";
 
@@ -45,6 +47,9 @@ interface UpdateFields {
   tags?: string[];
   slug?: string;
   author?: string;
+  /** Optional — passed by the portal so we can revalidate the right
+   *  path. If absent we revalidate the dynamic route catch-all instead. */
+  __slugForRevalidate?: string;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -135,7 +140,40 @@ export async function POST(req: Request) {
   try {
     const notion = new Client({ auth: token });
     await notion.pages.update({ page_id: id, properties: props });
-    return NextResponse.json({ ok: true, fieldsUpdated: Object.keys(props) });
+
+    // Live overlay so the change is visible on the live site instantly
+    // — no rebuild needed. Only writes the portal-editable subset.
+    const overlay: ArticleOverlay = {};
+    if (body.fields.title !== undefined) overlay.title = body.fields.title;
+    if (body.fields.excerpt !== undefined) overlay.excerpt = body.fields.excerpt;
+    if (body.fields.heroImageUrl !== undefined) overlay.heroImageUrl = body.fields.heroImageUrl;
+    if (body.fields.coverTint !== undefined) overlay.coverTint = body.fields.coverTint;
+    if (body.fields.tags !== undefined) overlay.tags = body.fields.tags;
+    if (Object.keys(overlay).length > 0) {
+      try {
+        await writeOverlay(id, overlay);
+      } catch (e) {
+        // Overlay is best-effort. Notion already has the change; next
+        // deploy will pick it up even if blob is offline.
+        console.warn("[update-article] overlay write failed:", (e as Error)?.message);
+      }
+    }
+
+    // Bust the cached overlay so the next page render reads fresh data.
+    // Next 16 requires a profile arg — "max" gives stale-while-revalidate
+    // (page stays instant; fresh data fills in on the next render after).
+    revalidateTag(ARTICLE_OVERLAY_TAG, "max");
+    revalidateTag(`${ARTICLE_OVERLAY_TAG}:${id}`, "max");
+    revalidatePath("/articles");
+    if (body.fields.__slugForRevalidate) {
+      revalidatePath(`/article/${body.fields.__slugForRevalidate}`);
+    } else {
+      // Fall back to invalidating the whole dynamic segment if we
+      // weren't told which slug to refresh.
+      revalidatePath("/article/[slug]", "page");
+    }
+
+    return NextResponse.json({ ok: true, fieldsUpdated: Object.keys(props), liveUpdated: Object.keys(overlay).length > 0 });
   } catch (e) {
     const msg = (e as Error)?.message || String(e);
     return NextResponse.json({ ok: false, error: msg }, { status: 500 });

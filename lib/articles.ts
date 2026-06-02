@@ -1,9 +1,11 @@
 // Article data loaders. Reads public/articles.json (built by
-// scripts/fetch-articles.mjs).
+// scripts/fetch-articles.mjs) and applies the per-article overlay
+// stored in Vercel Blob so portal Saves are visible without a rebuild.
 
 import { promises as fs } from "node:fs";
 import { join } from "node:path";
 import { cache } from "react";
+import { getOverlay } from "./article-overlay";
 
 export interface RichSegment {
   text: string;
@@ -54,7 +56,28 @@ export interface ArticlesFile {
 export const loadArticles = cache(async (): Promise<ArticlesFile | null> => {
   try {
     const raw = await fs.readFile(join(process.cwd(), "public", "articles.json"), "utf8");
-    return JSON.parse(raw) as ArticlesFile;
+    const base = JSON.parse(raw) as ArticlesFile;
+
+    // Apply the live overlay layer on top of the baked file. The overlay
+    // is cached per-article via unstable_cache + tag, so this is cheap
+    // after the first request. Save endpoint calls revalidateTag to
+    // invalidate. Falls back silently if Blob isn't configured.
+    const articles = await Promise.all(
+      base.articles.map(async (a) => {
+        const overlay = await getOverlay(a.id);
+        if (!overlay) return a;
+        return {
+          ...a,
+          ...(overlay.title !== undefined ? { title: overlay.title } : {}),
+          ...(overlay.excerpt !== undefined ? { excerpt: overlay.excerpt } : {}),
+          ...(overlay.coverTint !== undefined ? { coverTint: overlay.coverTint } : {}),
+          ...(overlay.heroImageUrl !== undefined ? { heroImageUrl: overlay.heroImageUrl } : {}),
+          ...(overlay.tags !== undefined ? { tags: overlay.tags } : {}),
+        };
+      }),
+    );
+
+    return { ...base, articles };
   } catch {
     return null;
   }

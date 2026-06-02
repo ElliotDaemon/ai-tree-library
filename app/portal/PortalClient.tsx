@@ -616,7 +616,10 @@ function ArticleEditor({ article }: { article: DashboardArticle }) {
     setSaving(true);
     setMsg(null);
     try {
-      const fields: Record<string, unknown> = {};
+      const fields: Record<string, unknown> = {
+        // Pass slug so the server can revalidate the exact page path.
+        __slugForRevalidate: article.slug,
+      };
       if (title !== article.title) fields.title = title;
       if (excerpt !== article.excerpt) fields.excerpt = excerpt;
       if (coverTint !== (article.coverTint || "cyan")) fields.coverTint = coverTint;
@@ -628,9 +631,14 @@ function ArticleEditor({ article }: { article: DashboardArticle }) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ id: article.id, fields }),
       });
-      const json = (await res.json()) as { ok: boolean; error?: string };
+      const json = (await res.json()) as { ok: boolean; error?: string; liveUpdated?: boolean };
       if (!json.ok) throw new Error(json.error || "save failed");
-      setMsg({ kind: "ok", text: "Saved to Notion. Next deploy will rebuild the article page." });
+      setMsg({
+        kind: "ok",
+        text: json.liveUpdated
+          ? "Saved. Reload the live article to see your changes."
+          : "Saved to Notion. Next deploy will rebuild the article page.",
+      });
     } catch (e) {
       setMsg({ kind: "err", text: (e as Error).message });
     } finally {
