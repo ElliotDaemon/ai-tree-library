@@ -66,22 +66,27 @@ export function getOverlay(id: string): Promise<ArticleOverlay | null> {
 /** Write an overlay for one article. Called by /api/portal/update-article
  *  immediately after the Notion write succeeds. Always overwrites in
  *  place — Notion remains the source of truth, this is just the live
- *  read cache. */
-export async function writeOverlay(id: string, fields: ArticleOverlay): Promise<void> {
-  if (!process.env.BLOB_READ_WRITE_TOKEN) return;
+ *  read cache. Returns the public URL of the written overlay (handy
+ *  for debugging — the portal surfaces it in the Save response). */
+export async function writeOverlay(id: string, fields: ArticleOverlay): Promise<string | null> {
+  if (!process.env.BLOB_READ_WRITE_TOKEN) return null;
   const existing = (await fetchOverlayUncached(id)) ?? {};
   const merged: ArticleOverlay = {
     ...existing,
     ...fields,
     updatedAt: new Date().toISOString(),
   };
-  await put(OVERLAY_PATH(id), JSON.stringify(merged), {
+  const result = await put(OVERLAY_PATH(id), JSON.stringify(merged), {
     access: "public",
     contentType: "application/json",
     allowOverwrite: true,
     // Disable random suffix so the path is deterministic for head()/fetch().
     addRandomSuffix: false,
+    // Bypass Vercel Blob's edge cache so the next overlay read sees
+    // this write immediately, not a 60s-stale copy.
+    cacheControlMaxAge: 0,
   });
+  return result.url;
 }
 
 export const ARTICLE_OVERLAY_TAG = OVERLAY_TAG;

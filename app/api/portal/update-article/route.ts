@@ -149,21 +149,28 @@ export async function POST(req: Request) {
     if (body.fields.heroImageUrl !== undefined) overlay.heroImageUrl = body.fields.heroImageUrl;
     if (body.fields.coverTint !== undefined) overlay.coverTint = body.fields.coverTint;
     if (body.fields.tags !== undefined) overlay.tags = body.fields.tags;
+
+    let overlayUrl: string | null = null;
+    let overlayError: string | null = null;
     if (Object.keys(overlay).length > 0) {
       try {
-        await writeOverlay(id, overlay);
+        overlayUrl = await writeOverlay(id, overlay);
       } catch (e) {
-        // Overlay is best-effort. Notion already has the change; next
-        // deploy will pick it up even if blob is offline.
-        console.warn("[update-article] overlay write failed:", (e as Error)?.message);
+        // Notion already has the change so the next deploy will pick
+        // it up — but we surface the error so the portal can tell the
+        // user that the live-update path failed.
+        overlayError = (e as Error)?.message || String(e);
+        console.warn("[update-article] overlay write failed:", overlayError);
       }
     }
 
     // Bust the cached overlay so the next page render reads fresh data.
-    // Next 16 requires a profile arg — "max" gives stale-while-revalidate
-    // (page stays instant; fresh data fills in on the next render after).
-    revalidateTag(ARTICLE_OVERLAY_TAG, "max");
-    revalidateTag(`${ARTICLE_OVERLAY_TAG}:${id}`, "max");
+    // Use { expire: 0 } for IMMEDIATE invalidation (Next 16's "max"
+    // profile is stale-while-revalidate, which serves the old value on
+    // the first request after Save — not what the user expects after
+    // explicitly hitting Save).
+    revalidateTag(ARTICLE_OVERLAY_TAG, { expire: 0 });
+    revalidateTag(`${ARTICLE_OVERLAY_TAG}:${id}`, { expire: 0 });
     revalidatePath("/articles");
     if (body.fields.__slugForRevalidate) {
       revalidatePath(`/article/${body.fields.__slugForRevalidate}`);
@@ -173,7 +180,13 @@ export async function POST(req: Request) {
       revalidatePath("/article/[slug]", "page");
     }
 
-    return NextResponse.json({ ok: true, fieldsUpdated: Object.keys(props), liveUpdated: Object.keys(overlay).length > 0 });
+    return NextResponse.json({
+      ok: true,
+      fieldsUpdated: Object.keys(props),
+      liveUpdated: overlayUrl !== null,
+      overlayUrl,
+      overlayError,
+    });
   } catch (e) {
     const msg = (e as Error)?.message || String(e);
     return NextResponse.json({ ok: false, error: msg }, { status: 500 });

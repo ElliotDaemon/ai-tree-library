@@ -39,6 +39,13 @@ export async function generateStaticParams() {
 
 export const dynamicParams = true;
 
+// Safety-net revalidate window. The portal's Save endpoint calls
+// revalidatePath() to invalidate this page immediately on edit, but
+// if that fails for any reason (network blip, cache eventually-
+// consistent, etc.) freshness is still bounded to 30s. Cheap because
+// the page render is just a filesystem read + ≤11 cached blob fetches.
+export const revalidate = 30;
+
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
   const article = await findArticleBySlug(slug);

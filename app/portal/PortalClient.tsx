@@ -658,12 +658,23 @@ function ArticleEditor({ article }: { article: DashboardArticle }) {
       });
       const json = await safeJson(res);
       if (!json.ok) throw new Error(json.error || "save failed");
-      setMsg({
-        kind: "ok",
-        text: json.liveUpdated
-          ? "Saved. Reload the live article to see your changes."
-          : "Saved to Notion. Next deploy will rebuild the article page.",
-      });
+      const overlayError = json.overlayError as string | null | undefined;
+      if (overlayError) {
+        setMsg({
+          kind: "err",
+          text: `Saved to Notion, but live-update layer failed: ${overlayError}. Next deploy will pick up the change.`,
+        });
+      } else if (json.liveUpdated) {
+        setMsg({
+          kind: "ok",
+          text: "Saved. Reload the live article to see your changes.",
+        });
+      } else {
+        setMsg({
+          kind: "ok",
+          text: "Saved to Notion. Next deploy will rebuild the article page.",
+        });
+      }
     } catch (e) {
       setMsg({ kind: "err", text: (e as Error).message });
     } finally {
