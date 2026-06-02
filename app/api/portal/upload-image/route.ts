@@ -1,54 +1,37 @@
-// Admin-only: upload an article hero image to Vercel Blob storage and
-// return the public URL. The portal calls this when the user drops a
-// file into the hero-image editor; the resulting URL is then saved to
-// Notion's "Hero Image URL" field via /api/portal/update-article.
+// Admin-only: issue a short-lived client token so the portal's hero-
+// image editor can upload directly from the browser to Vercel Blob.
+// The browser POSTs to this route to *get the token*, then uploads
+// straight to Blob storage — bypassing the 4.5 MB serverless body
+// limit that would reject large hero images.
 //
-// Auth: same signed-cookie middleware as /portal.
+// Flow:
+//   1. Portal calls `upload(pathname, file, { handleUploadUrl: this })`
+//   2. @vercel/blob/client POSTs a JSON body here asking for a token
+//   3. This route's `handleUpload` verifies auth, generates a token
+//      scoped to the pathname + content-type, returns it
+//   4. Browser uploads directly to Vercel Blob using the token
+//   5. Blob calls back to this route once the upload is committed
+//      (onUploadCompleted) — we don't need to do anything there
 //
-// Request: multipart/form-data with one field:
-//   file: the image blob (jpg / png / webp / avif / gif, ≤ 8MB)
-// Optional form fields:
-//   slug: article slug — used to namespace the blob path
-//
-// Response: { ok: true, url: string } | { ok: false, error: string }
-//
-// Env: requires BLOB_READ_WRITE_TOKEN. The token is created on the
-// Vercel dashboard (Storage → Blob → Create store) and is auto-exposed
-// to the deployment. For local development, copy it from Vercel CLI
-// (`vercel env pull`) — without it, the route returns a clear error.
+// Auth: same signed-cookie middleware that gates /portal. The cookie
+// rides along with the token-issuance request from the browser.
 
 import { NextResponse } from "next/server";
-import { put } from "@vercel/blob";
+import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
 import { verifySession, SESSION_COOKIE } from "@/lib/portal-auth";
 
 export const runtime = "nodejs";
 
-const MAX_BYTES = 8 * 1024 * 1024; // 8 MB
-const ALLOWED_TYPES = new Set([
+const ALLOWED_TYPES = [
   "image/jpeg",
   "image/png",
   "image/webp",
   "image/avif",
   "image/gif",
-]);
+];
 
-function safeSlug(s: string): string {
-  return s.toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60) || "article";
-}
-
-function extFromType(type: string): string {
-  switch (type) {
-    case "image/jpeg": return "jpg";
-    case "image/png": return "png";
-    case "image/webp": return "webp";
-    case "image/avif": return "avif";
-    case "image/gif": return "gif";
-    default: return "bin";
-  }
-}
-
-export async function POST(req: Request) {
-  // Auth gate
+export async function POST(req: Request): Promise<NextResponse> {
+  // Auth gate — same session cookie as /portal
   const cookieHeader = req.headers.get("cookie") ?? "";
   const sessionMatch = cookieHeader.match(new RegExp(`${SESSION_COOKIE}=([^;]+)`));
   const session = sessionMatch?.[1];
@@ -61,52 +44,50 @@ export async function POST(req: Request) {
       {
         ok: false,
         error:
-          "Blob storage isn't configured. Create a Blob store in the Vercel dashboard (Storage → Blob) and BLOB_READ_WRITE_TOKEN will be auto-injected. URL paste still works without it.",
+          "Blob storage isn't configured. Create a Blob store in the Vercel dashboard (Storage → Blob) — BLOB_READ_WRITE_TOKEN will be auto-injected.",
       },
       { status: 503 },
     );
   }
 
-  let form: FormData;
+  let body: HandleUploadBody;
   try {
-    form = await req.formData();
+    body = (await req.json()) as HandleUploadBody;
   } catch {
-    return NextResponse.json({ ok: false, error: "Invalid multipart body" }, { status: 400 });
+    return NextResponse.json({ ok: false, error: "Invalid JSON" }, { status: 400 });
   }
-
-  const file = form.get("file");
-  if (!(file instanceof Blob)) {
-    return NextResponse.json({ ok: false, error: "file field required" }, { status: 400 });
-  }
-
-  if (!ALLOWED_TYPES.has(file.type)) {
-    return NextResponse.json(
-      { ok: false, error: `unsupported type ${file.type || "(unknown)"} — use jpg/png/webp/avif/gif` },
-      { status: 400 },
-    );
-  }
-
-  if (file.size > MAX_BYTES) {
-    return NextResponse.json({ ok: false, error: `file too large (max ${MAX_BYTES / 1024 / 1024} MB)` }, { status: 400 });
-  }
-
-  const slugField = (form.get("slug") ?? "") as string;
-  const slug = safeSlug(slugField || "article");
-  const ext = extFromType(file.type);
-  // Namespaced path so different articles' uploads don't collide and
-  // the most recent upload always wins per article. Random suffix on
-  // top in case the same slug is uploaded multiple times — Notion only
-  // keeps the latest URL pointer anyway.
-  const stamp = Date.now().toString(36);
-  const path = `article-hero/${slug}/${stamp}.${ext}`;
 
   try {
-    const result = await put(path, file, {
-      access: "public",
-      contentType: file.type,
-      addRandomSuffix: false,
+    const jsonResponse = await handleUpload({
+      body,
+      request: req,
+      onBeforeGenerateToken: async (pathname /*, clientPayload */) => {
+        // Pathname comes from the client; we've already auth-gated the
+        // route, so the caller is trusted. Lock down content types +
+        // size in the token so the browser can't swap to e.g. an exe.
+        return {
+          allowedContentTypes: ALLOWED_TYPES,
+          // 16 MB — generous ceiling for hero images. Real photo files
+          // are usually 1-4 MB. Anything bigger is suspicious.
+          maximumSizeInBytes: 16 * 1024 * 1024,
+          // Random suffix avoids cache-poisoning when the same article
+          // gets multiple uploads (latest URL written to Notion wins).
+          addRandomSuffix: true,
+          // Token TTL — 30 min is plenty to upload a single image even
+          // on a slow connection.
+          validUntil: Date.now() + 30 * 60_000,
+          // Pin the pathname so the client can't smuggle a different
+          // one between requesting the token and uploading.
+          tokenPayload: JSON.stringify({ pathname }),
+        };
+      },
+      onUploadCompleted: async () => {
+        // No-op — the client already gets the final URL and writes
+        // it to Notion via /api/portal/update-article. We keep this
+        // handler defined because @vercel/blob requires it.
+      },
     });
-    return NextResponse.json({ ok: true, url: result.url });
+    return NextResponse.json(jsonResponse);
   } catch (e) {
     const msg = (e as Error)?.message || String(e);
     return NextResponse.json({ ok: false, error: msg }, { status: 500 });

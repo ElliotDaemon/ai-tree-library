@@ -12,7 +12,26 @@
 
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
+import { upload } from "@vercel/blob/client";
 import type { DashboardData, DashboardEntry, DashboardArticle } from "../../lib/portal-data";
+
+// Parse a response that we expect to be JSON, but gracefully recover
+// when the platform (Vercel proxy, network appliance) returns plain
+// text — typically for 413/502/504 errors. Without this, the user sees
+// "Unexpected token 'R'…" for "Request Entity Too Large" responses.
+async function safeJson(res: Response): Promise<{ ok: boolean; error?: string; [k: string]: unknown }> {
+  const ct = res.headers.get("content-type") || "";
+  if (ct.includes("application/json")) {
+    try {
+      return await res.json();
+    } catch {
+      return { ok: false, error: `Bad JSON from server (HTTP ${res.status})` };
+    }
+  }
+  const text = await res.text();
+  const snippet = text.slice(0, 200).trim();
+  return { ok: false, error: `HTTP ${res.status} — ${snippet || res.statusText}` };
+}
 
 interface Props {
   data: DashboardData;
@@ -597,16 +616,22 @@ function ArticleEditor({ article }: { article: DashboardArticle }) {
     setUploading(true);
     setMsg(null);
     try {
-      const form = new FormData();
-      form.append("file", file);
-      form.append("slug", article.slug);
-      const res = await fetch("/api/portal/upload-image", { method: "POST", body: form });
-      const json = (await res.json()) as { ok: boolean; url?: string; error?: string };
-      if (!json.ok || !json.url) throw new Error(json.error || "upload failed");
-      setHeroUrl(json.url);
+      // Direct-to-Blob upload. The browser talks to Vercel Blob, and
+      // our server endpoint only hands out a short-lived token. This
+      // sidesteps the 4.5 MB serverless body limit that would
+      // otherwise reject larger hero images with "Request Entity Too
+      // Large" (plain-text, unparseable as JSON).
+      const ext = file.name.includes(".") ? file.name.split(".").pop() : "bin";
+      const pathname = `article-hero/${article.slug}/${Date.now()}.${ext}`;
+      const blob = await upload(pathname, file, {
+        access: "public",
+        handleUploadUrl: "/api/portal/upload-image",
+        contentType: file.type || undefined,
+      });
+      setHeroUrl(blob.url);
       setMsg({ kind: "ok", text: "Uploaded. Click Save to apply." });
     } catch (e) {
-      setMsg({ kind: "err", text: (e as Error).message });
+      setMsg({ kind: "err", text: (e as Error).message || "Upload failed" });
     } finally {
       setUploading(false);
     }
@@ -631,7 +656,7 @@ function ArticleEditor({ article }: { article: DashboardArticle }) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ id: article.id, fields }),
       });
-      const json = (await res.json()) as { ok: boolean; error?: string; liveUpdated?: boolean };
+      const json = await safeJson(res);
       if (!json.ok) throw new Error(json.error || "save failed");
       setMsg({
         kind: "ok",
