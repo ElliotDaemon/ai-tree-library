@@ -108,7 +108,11 @@ function toSegment(s) {
 const t = (text) => text;
 const b = (text) => ({ text, bold: true });
 const i = (text) => ({ text, italic: true });
-const link = (text, href) => ({ text, link: href });
+// Notion validates link URLs and rejects bare paths. Resolve any leading
+// "/" into an absolute URL on the canonical origin before sending.
+const SITE_ORIGIN = "https://aitreelibrary.com";
+const absolutize = (href) => (href && href.startsWith("/") ? `${SITE_ORIGIN}${href}` : href);
+const link = (text, href) => ({ text, link: absolutize(href) });
 const tool = (slug) => p(`::tool[${slug}]::`);
 
 // ---------- Article template helper ----------
