@@ -665,10 +665,12 @@ function ArticleEditor({ article }: { article: DashboardArticle }) {
           text: `Saved to Notion, but live-update layer failed: ${overlayError}. Next deploy will pick up the change.`,
         });
       } else if (json.liveUpdated) {
-        setMsg({
-          kind: "ok",
-          text: "Saved. Reload the live article to see your changes.",
-        });
+        // Live overlay wrote successfully. Pop open the live article in
+        // a new tab with a cache-busting query so the user sees the
+        // change immediately, without manually reloading.
+        const url = `/article/${article.slug}?v=${Date.now()}`;
+        window.open(url, "_blank", "noopener,noreferrer");
+        setMsg({ kind: "ok", text: "Saved. Opened the updated article in a new tab." });
       } else {
         setMsg({
           kind: "ok",

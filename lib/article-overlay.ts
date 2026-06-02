@@ -21,7 +21,6 @@
 // the time it takes Vercel to render the next request (sub-second),
 // without rebuilding anything.
 
-import { unstable_cache } from "next/cache";
 import { head, put } from "@vercel/blob";
 
 const OVERLAY_TAG = "article-overlay";
@@ -42,8 +41,12 @@ export interface ArticleOverlay {
 async function fetchOverlayUncached(id: string): Promise<ArticleOverlay | null> {
   if (!process.env.BLOB_READ_WRITE_TOKEN) return null;
   try {
+    // Stamp the head() with a request-time query so any Blob edge
+    // cache hits a fresh URL — and the fetch carries cache: no-store
+    // so the HTTP layer doesn't cache either.
     const blob = await head(OVERLAY_PATH(id));
-    const res = await fetch(blob.url, { cache: "no-store" });
+    const fresh = `${blob.url}${blob.url.includes("?") ? "&" : "?"}_=${Date.now()}`;
+    const res = await fetch(fresh, { cache: "no-store" });
     if (!res.ok) return null;
     return (await res.json()) as ArticleOverlay;
   } catch {
@@ -52,15 +55,13 @@ async function fetchOverlayUncached(id: string): Promise<ArticleOverlay | null> 
   }
 }
 
-/** Cached read. Invalidated whenever the Save endpoint calls
- *  revalidateTag('article-overlay'). The per-id key in keyParts means
- *  each article's overlay is cached independently. */
+/** Always-fresh read. The article page is force-dynamic, so caching
+ *  the overlay would just hide updates from the editor without any
+ *  meaningful performance win (these are tiny JSON files). The save
+ *  endpoint still calls revalidateTag for forward compatibility if
+ *  we re-enable caching later. */
 export function getOverlay(id: string): Promise<ArticleOverlay | null> {
-  return unstable_cache(
-    () => fetchOverlayUncached(id),
-    ["article-overlay", id],
-    { tags: [OVERLAY_TAG, `${OVERLAY_TAG}:${id}`], revalidate: 3600 },
-  )();
+  return fetchOverlayUncached(id);
 }
 
 /** Write an overlay for one article. Called by /api/portal/update-article

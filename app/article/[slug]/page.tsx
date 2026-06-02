@@ -39,12 +39,14 @@ export async function generateStaticParams() {
 
 export const dynamicParams = true;
 
-// Safety-net revalidate window. The portal's Save endpoint calls
-// revalidatePath() to invalidate this page immediately on edit, but
-// if that fails for any reason (network blip, cache eventually-
-// consistent, etc.) freshness is still bounded to 30s. Cheap because
-// the page render is just a filesystem read + ≤11 cached blob fetches.
-export const revalidate = 30;
+// Force dynamic rendering. The portal's Save flow needs the article
+// page to reflect changes the instant the user reloads — any cache
+// layer (page-level revalidate window, CDN HTML cache, Next data
+// cache) introduces a wait that confuses the user ("did it save?").
+// Each render is just a filesystem read + a handful of small blob
+// fetches, so the cost of going fully dynamic is negligible vs. the
+// editor-UX win. We can re-enable caching once content stabilises.
+export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
