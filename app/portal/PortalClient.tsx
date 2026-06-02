@@ -33,6 +33,68 @@ async function safeJson(res: Response): Promise<{ ok: boolean; error?: string; [
   return { ok: false, error: `HTTP ${res.status} — ${snippet || res.statusText}` };
 }
 
+// Client-side image compression. Resizes oversized images down to
+// 1600px wide (≥2x hero render size for high-DPI displays) and
+// re-encodes as WebP at 82% quality — typical 5 MB JPEG ⇒ ~300 KB
+// WebP with no visible quality loss. Solves three things at once:
+//   1. No upload size limits to worry about
+//   2. Hero loads near-instantly on the live page
+//   3. Faster OG-image scrape for social shares
+// Skipped for files already under ~250 KB (likely already optimised).
+async function compressHero(file: File): Promise<{ blob: Blob; ext: string }> {
+  const PASSTHROUGH_LIMIT = 250 * 1024; // 250 KB
+  const MAX_WIDTH = 1600;
+  const QUALITY = 0.82;
+
+  // GIFs don't survive canvas round-trip (animation is lost). Pass
+  // through. Same with anything tiny that doesn't need it.
+  if (file.type === "image/gif" || file.size < PASSTHROUGH_LIMIT) {
+    const ext = (file.name.split(".").pop() || "bin").toLowerCase();
+    return { blob: file, ext };
+  }
+
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(1, MAX_WIDTH / bitmap.width);
+  const w = Math.round(bitmap.width * scale);
+  const h = Math.round(bitmap.height * scale);
+
+  // OffscreenCanvas is available in all modern browsers; fall back to
+  // a regular canvas if not.
+  const canvas =
+    typeof OffscreenCanvas !== "undefined"
+      ? new OffscreenCanvas(w, h)
+      : Object.assign(document.createElement("canvas"), { width: w, height: h });
+  const ctx = (canvas as HTMLCanvasElement | OffscreenCanvas).getContext("2d") as
+    | CanvasRenderingContext2D
+    | OffscreenCanvasRenderingContext2D
+    | null;
+  if (!ctx) throw new Error("Browser can't open a 2D canvas to compress this image.");
+  ctx.drawImage(bitmap, 0, 0, w, h);
+
+  // Try WebP first (smallest), fall back to JPEG if the encoder
+  // refuses for some reason (very rare in 2026, but cheap to guard).
+  let blob: Blob | null = null;
+  if ("convertToBlob" in canvas) {
+    try {
+      blob = await (canvas as OffscreenCanvas).convertToBlob({ type: "image/webp", quality: QUALITY });
+    } catch {
+      blob = await (canvas as OffscreenCanvas).convertToBlob({ type: "image/jpeg", quality: QUALITY });
+    }
+  } else {
+    blob = await new Promise<Blob | null>((resolve) =>
+      (canvas as HTMLCanvasElement).toBlob(resolve, "image/webp", QUALITY),
+    );
+    if (!blob) {
+      blob = await new Promise<Blob | null>((resolve) =>
+        (canvas as HTMLCanvasElement).toBlob(resolve, "image/jpeg", QUALITY),
+      );
+    }
+  }
+  if (!blob) throw new Error("Browser failed to encode compressed image.");
+  const ext = blob.type === "image/webp" ? "webp" : "jpg";
+  return { blob, ext };
+}
+
 interface Props {
   data: DashboardData;
 }
@@ -604,7 +666,7 @@ function ArticleEditor({ article }: { article: DashboardArticle }) {
   const [heroUrl, setHeroUrl] = useState(article.heroImageUrl ?? "");
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+  const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string; viewUrl?: string } | null>(null);
 
   const dirty =
     title !== article.title ||
@@ -616,20 +678,29 @@ function ArticleEditor({ article }: { article: DashboardArticle }) {
     setUploading(true);
     setMsg(null);
     try {
-      // Direct-to-Blob upload. The browser talks to Vercel Blob, and
-      // our server endpoint only hands out a short-lived token. This
-      // sidesteps the 4.5 MB serverless body limit that would
-      // otherwise reject larger hero images with "Request Entity Too
-      // Large" (plain-text, unparseable as JSON).
-      const ext = file.name.includes(".") ? file.name.split(".").pop() : "bin";
+      // Compress + resize client-side BEFORE uploading. Typical 5 MB
+      // hero shot drops to ~300 KB WebP — page loads near-instantly
+      // and we never hit any size limit.
+      const originalKB = Math.round(file.size / 1024);
+      const { blob, ext } = await compressHero(file);
+      const finalKB = Math.round(blob.size / 1024);
+
+      // Direct-to-Blob upload via @vercel/blob/client — the browser
+      // uploads straight to storage with a server-issued token, so
+      // we don't pay the 4.5 MB serverless body limit even pre-compress.
+      const contentType = blob.type || file.type || undefined;
       const pathname = `article-hero/${article.slug}/${Date.now()}.${ext}`;
-      const blob = await upload(pathname, file, {
+      const uploaded = await upload(pathname, blob, {
         access: "public",
         handleUploadUrl: "/api/portal/upload-image",
-        contentType: file.type || undefined,
+        contentType,
       });
-      setHeroUrl(blob.url);
-      setMsg({ kind: "ok", text: "Uploaded. Click Save to apply." });
+      setHeroUrl(uploaded.url);
+      const compressionNote =
+        finalKB < originalKB
+          ? ` — compressed ${originalKB} KB → ${finalKB} KB`
+          : ` — ${finalKB} KB`;
+      setMsg({ kind: "ok", text: `Uploaded${compressionNote}. Click Save to apply.` });
     } catch (e) {
       setMsg({ kind: "err", text: (e as Error).message || "Upload failed" });
     } finally {
@@ -665,12 +736,11 @@ function ArticleEditor({ article }: { article: DashboardArticle }) {
           text: `Saved to Notion, but live-update layer failed: ${overlayError}. Next deploy will pick up the change.`,
         });
       } else if (json.liveUpdated) {
-        // Live overlay wrote successfully. Pop open the live article in
-        // a new tab with a cache-busting query so the user sees the
-        // change immediately, without manually reloading.
-        const url = `/article/${article.slug}?v=${Date.now()}`;
-        window.open(url, "_blank", "noopener,noreferrer");
-        setMsg({ kind: "ok", text: "Saved. Opened the updated article in a new tab." });
+        // Cache-busting query so the browser can't return a stale
+        // HTML cached from a prior visit. The article page is
+        // force-dynamic server-side so the render itself is fresh.
+        const viewUrl = `/article/${article.slug}?v=${Date.now()}`;
+        setMsg({ kind: "ok", text: "Saved.", viewUrl });
       } else {
         setMsg({
           kind: "ok",
@@ -797,7 +867,19 @@ function ArticleEditor({ article }: { article: DashboardArticle }) {
       </div>
 
       {msg ? (
-        <div className={`pv-msg pv-msg-${msg.kind}`}>{msg.text}</div>
+        <div className={`pv-msg pv-msg-${msg.kind}`}>
+          <span>{msg.text}</span>
+          {msg.viewUrl ? (
+            <Link
+              href={msg.viewUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="pv-msg-action"
+            >
+              View live ↗
+            </Link>
+          ) : null}
+        </div>
       ) : null}
     </div>
   );

@@ -3984,6 +3984,10 @@ body:has(.tp-page), body:has(.cp-page), body:has(.legal-page) {
 }
 
 .pv-msg {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
   padding: 0.6rem 0.8rem;
   border-radius: 6px;
   font-size: 0.78rem;
@@ -4000,6 +4004,19 @@ body:has(.tp-page), body:has(.cp-page), body:has(.legal-page) {
   border-color: rgba(239,153,153,0.3);
   color: var(--pv-danger);
 }
+.pv-msg-action {
+  flex-shrink: 0;
+  padding: 0.28rem 0.7rem;
+  border-radius: 5px;
+  border: 1px solid currentColor;
+  color: inherit;
+  text-decoration: none;
+  font-size: 0.74rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  transition: background 0.12s ease;
+}
+.pv-msg-action:hover { background: rgba(255,255,255,0.06); }
 
 @media (max-width: 720px) {
   .pv-form-grid { grid-template-columns: 1fr; }
