@@ -338,6 +338,31 @@ async function fetchVercelData(): Promise<Partial<DashboardData>> {
     topSearches = [...searches.entries()].sort((a, b) => b[1] - a[1]).slice(0, 24).map(([q]) => q);
   }
 
+  // Heuristic: if the API "succeeded" but came back with all-zero
+  // pageview totals AND no top routes / events, that's almost
+  // certainly an API-shape mismatch (Vercel's web-analytics REST
+  // endpoints are dashboard-internal and quietly return empty
+  // payloads when the scope / project mapping isn't right), not a
+  // genuine zero-traffic project. Surface as "not connected" so the
+  // UI falls back to the "Open Vercel Dashboard ↗" CTA instead of
+  // pretending the site has zero visitors.
+  const looksEmpty =
+    visitors.day === 0 &&
+    visitors.week === 0 &&
+    visitors.month === 0 &&
+    (!topRoutes || topRoutes.length === 0) &&
+    !topToolEvents?.length &&
+    !topCategoryEvents?.length;
+
+  if (looksEmpty) {
+    return {
+      vercelOk: false,
+      errors: [
+        "Vercel REST API returned no analytics data. The dashboard shows numbers but the API endpoints used here aren't public — open the Vercel dashboard for live traffic.",
+      ],
+    };
+  }
+
   return {
     vercelOk: true,
     visitors,

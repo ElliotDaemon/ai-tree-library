@@ -131,6 +131,7 @@ export default function PortalClient({ data }: Props) {
   const [search, setSearch] = useState("");
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(new Set()); // optimistically-removed rows
   const [actionErrors, setActionErrors] = useState<Record<string, string>>({});
+  const [addToolOpen, setAddToolOpen] = useState(false);
   const [, startTransition] = useTransition();
 
   const pending = useMemo(
@@ -178,6 +179,13 @@ export default function PortalClient({ data }: Props) {
         </div>
         <div className="pv-header-meta">
           <span className="pv-meta-item">Updated {ageLabel((Date.now() - new Date(data.generatedAt).getTime()) / 3_600_000)} ago</span>
+          <button
+            type="button"
+            className="pv-btn pv-btn-primary"
+            onClick={() => setAddToolOpen(true)}
+          >
+            + Add tool
+          </button>
           <Link href="/" className="pv-meta-link">Site</Link>
           <form method="POST" action="/api/portal/logout" style={{ display: "inline" }}>
             <button type="submit" className="pv-meta-link" style={{ background: "none", border: "none", cursor: "pointer", font: "inherit", padding: 0 }}>
@@ -186,6 +194,8 @@ export default function PortalClient({ data }: Props) {
           </form>
         </div>
       </header>
+
+      {addToolOpen ? <AddToolModal onClose={() => setAddToolOpen(false)} /> : null}
 
       {/* AT-A-GLANCE STRIP — compact, no boxes */}
       <section className="pv-strip">
@@ -216,9 +226,18 @@ export default function PortalClient({ data }: Props) {
         />
         <StripStat label="Total library" value={data.statusCounts.total} />
         {visitors ? (
-          <StripStat label="Visitors 28d" value={visitors.month} />
+          <StripStat
+            label="Visitors 28d"
+            value={visitors.month}
+            href={data.vercelDashboardUrl}
+          />
         ) : (
-          <StripStat label="Visitors 28d" value={"—"} sub="see Vercel" />
+          <StripStat
+            label="Visitors 28d"
+            value={"↗"}
+            sub="Open Vercel"
+            href={data.vercelDashboardUrl}
+          />
         )}
       </section>
 
@@ -362,6 +381,7 @@ function StripStat({
   tone,
   active,
   onClick,
+  href,
 }: {
   label: string;
   value: number | string;
@@ -369,25 +389,37 @@ function StripStat({
   tone?: "warn";
   active?: boolean;
   onClick?: () => void;
+  /** External link — renders as <a target="_blank"> instead of a
+   *  button. Mutually exclusive with onClick; if both provided,
+   *  href wins. Used for the "Open Vercel Dashboard" cell. */
+  href?: string;
 }) {
-  const interactive = !!onClick;
-  return (
-    <button
-      type="button"
-      className={`pv-strip-cell ${active ? "is-active" : ""} ${tone === "warn" ? "is-warn" : ""} ${interactive ? "is-clickable" : ""}`}
-      onClick={onClick}
-      disabled={!interactive}
-    >
+  const interactive = !!onClick || !!href;
+  const className = `pv-strip-cell ${active ? "is-active" : ""} ${tone === "warn" ? "is-warn" : ""} ${interactive ? "is-clickable" : ""}`;
+  const inner = (
+    <>
       <div className="pv-strip-value">{typeof value === "number" ? fmtNum(value) : value}</div>
       <div className="pv-strip-label">
         {label}
         {sub ? <span className="pv-strip-sub"> · {sub}</span> : null}
       </div>
-      {interactive ? (
+      {interactive && !href ? (
         <span className="pv-strip-chevron" aria-hidden>
           {active ? "▴" : "▾"}
         </span>
       ) : null}
+    </>
+  );
+  if (href) {
+    return (
+      <a href={href} target="_blank" rel="noopener noreferrer" className={className}>
+        {inner}
+      </a>
+    );
+  }
+  return (
+    <button type="button" className={className} onClick={onClick} disabled={!interactive}>
+      {inner}
     </button>
   );
 }
@@ -919,6 +951,370 @@ function BarList({
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// ---------- Add-tool modal ----------
+//
+// Two-step flow:
+//   1. User pastes a URL → POST /api/portal/preview-tool → server scrapes
+//      the page, classifies via Claude, returns suggested fields + the
+//      full category list for the dropdown.
+//   2. User reviews/edits the suggestion → POST /api/portal/add-tool
+//      → server writes to Notion Library DB as Status=Ready.
+//
+// The whole modal is one self-contained component so it can be mounted
+// from anywhere in the portal without prop drilling.
+
+const RARITY_OPTIONS = ["Legendary", "Established", "Rare", "Hidden Gem"] as const;
+const TYPE_OPTIONS = ["Tool", "Website", "Inspiration", "Resource"] as const;
+const PRICING_OPTIONS = ["Free", "Freemium", "Paid", "Unknown"] as const;
+const STATUS_OPTIONS = ["Ready", "Needs Review", "Hidden"] as const;
+
+interface Suggestion {
+  name: string;
+  description: string;
+  longDescription: string;
+  category: string;
+  rarity: string;
+  type: string;
+  pricing: string;
+  ogImage: string;
+  hostname: string;
+  url: string;
+  allCategories: Array<{ id: string; name: string }>;
+  aiUsed: boolean;
+}
+
+function AddToolModal({ onClose }: { onClose: () => void }) {
+  const router = useRouter();
+  const [step, setStep] = useState<"input" | "preview">("input");
+  const [url, setUrl] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [suggestion, setSuggestion] = useState<Suggestion | null>(null);
+  const [existing, setExisting] = useState<{ id: string; name: string; status: string } | null>(null);
+
+  // Editable fields once suggestion arrives
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+  const [longDescription, setLongDescription] = useState("");
+  const [categoryId, setCategoryId] = useState("");
+  const [rarity, setRarity] = useState<string>("Established");
+  const [type, setType] = useState<string>("Tool");
+  const [pricing, setPricing] = useState<string>("Unknown");
+  const [status, setStatus] = useState<string>("Ready");
+  const [saving, setSaving] = useState(false);
+  const [done, setDone] = useState<{ slug: string; name: string } | null>(null);
+
+  async function handlePreview() {
+    if (!url.trim()) {
+      setErr("Paste a URL first");
+      return;
+    }
+    setLoading(true);
+    setErr(null);
+    try {
+      const res = await fetch("/api/portal/preview-tool", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ url }),
+      });
+      const json = await safeJson(res);
+      if (!json.ok) throw new Error(json.error || "Couldn't preview that URL");
+      const s = json.suggestion as Suggestion;
+      const ex = (json.existing as { id: string; name: string; status: string } | null) ?? null;
+      setSuggestion(s);
+      setExisting(ex);
+      // Pre-fill editable state
+      setName(s.name);
+      setDescription(s.description);
+      setLongDescription(s.longDescription);
+      const matchedCategory = s.allCategories.find((c) => c.name === s.category);
+      setCategoryId(matchedCategory?.id ?? "");
+      setRarity(s.rarity);
+      setType(s.type);
+      setPricing(s.pricing);
+      setStep("preview");
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleCommit() {
+    if (!suggestion) return;
+    setSaving(true);
+    setErr(null);
+    try {
+      const res = await fetch("/api/portal/add-tool", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          url: suggestion.url,
+          name,
+          description,
+          longDescription,
+          category: categoryId || undefined,
+          rarity,
+          type,
+          pricing,
+          status,
+        }),
+      });
+      const json = await safeJson(res);
+      if (!json.ok) throw new Error(json.error || "Couldn't save");
+      setDone({ slug: (json.slug as string) || "", name: (json.name as string) || name });
+      router.refresh();
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  // Close on Escape
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useMemo(() => {
+    if (typeof window === "undefined") return;
+    const h = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, []);
+
+  return (
+    <div className="pv-modal-backdrop" onClick={onClose}>
+      <div className="pv-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="pv-modal-head">
+          <div>
+            <div className="pv-modal-title">Add tool to Library</div>
+            <div className="pv-modal-sub">
+              {step === "input"
+                ? "Paste a URL — we'll scrape + classify it for you."
+                : "Review the auto-fill. Edit anything, then Save."}
+            </div>
+          </div>
+          <button type="button" className="pv-modal-close" onClick={onClose} aria-label="Close">
+            ✕
+          </button>
+        </div>
+
+        {done ? (
+          <div className="pv-modal-body">
+            <div className="pv-msg pv-msg-ok">
+              <span>
+                Added <strong>{done.name}</strong>. Will appear on the live constellation after
+                the next deploy.
+              </span>
+              <Link
+                href={`/${done.slug}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="pv-msg-action"
+              >
+                View page ↗
+              </Link>
+            </div>
+            <div className="pv-actions">
+              <button type="button" className="pv-btn pv-btn-ghost" onClick={onClose}>
+                Close
+              </button>
+              <button
+                type="button"
+                className="pv-btn pv-btn-primary"
+                onClick={() => {
+                  setDone(null);
+                  setSuggestion(null);
+                  setUrl("");
+                  setStep("input");
+                }}
+              >
+                Add another
+              </button>
+            </div>
+          </div>
+        ) : step === "input" ? (
+          <div className="pv-modal-body">
+            <label className="pv-field pv-field-wide">
+              <span className="pv-field-label">URL</span>
+              <input
+                type="url"
+                className="pv-input"
+                placeholder="https://example.com"
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && !loading && handlePreview()}
+                autoFocus
+                disabled={loading}
+              />
+            </label>
+            <div className="pv-hint">
+              We&apos;ll fetch the page, extract title + description, and{" "}
+              {process.env.NEXT_PUBLIC_AI_CLASSIFY === "false"
+                ? "use it as-is."
+                : "ask Claude to classify the category and write a 300-word factual long description."}{" "}
+              You&apos;ll see the preview before anything saves.
+            </div>
+            {err ? <div className="pv-msg pv-msg-err"><span>{err}</span></div> : null}
+            <div className="pv-actions">
+              <button type="button" className="pv-btn pv-btn-ghost" onClick={onClose}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="pv-btn pv-btn-primary"
+                onClick={handlePreview}
+                disabled={loading || !url.trim()}
+              >
+                {loading ? "Fetching…" : "Preview"}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="pv-modal-body">
+            {existing ? (
+              <div className="pv-msg pv-msg-err">
+                <span>
+                  <strong>{existing.name}</strong> is already in the Library (Status:{" "}
+                  {existing.status}). Edit it there if you want to update.
+                </span>
+              </div>
+            ) : null}
+            {suggestion?.aiUsed === false ? (
+              <div className="pv-msg pv-msg-err">
+                <span>
+                  Claude classification not available (no ANTHROPIC_API_KEY). Suggestion is
+                  based only on the page&apos;s meta tags.
+                </span>
+              </div>
+            ) : null}
+
+            {suggestion?.ogImage ? (
+              <div className="pv-hero-preview" style={{ maxWidth: "100%" }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={suggestion.ogImage} alt={`${name} preview`} />
+              </div>
+            ) : null}
+
+            <div className="pv-form-grid">
+              <label className="pv-field pv-field-wide">
+                <span className="pv-field-label">Name</span>
+                <input type="text" className="pv-input" value={name} onChange={(e) => setName(e.target.value)} disabled={saving} />
+              </label>
+
+              <label className="pv-field pv-field-wide">
+                <span className="pv-field-label">Short description</span>
+                <textarea
+                  className="pv-input pv-textarea"
+                  rows={2}
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  disabled={saving}
+                  placeholder="One sentence, definitional. e.g. 'X is a Y that does Z.'"
+                />
+              </label>
+
+              <label className="pv-field pv-field-wide">
+                <span className="pv-field-label">Long description</span>
+                <textarea
+                  className="pv-input pv-textarea"
+                  rows={6}
+                  value={longDescription}
+                  onChange={(e) => setLongDescription(e.target.value)}
+                  disabled={saving}
+                  placeholder="200-350 words, factual. Lead with what it is. Mention capabilities, who uses it, comparisons."
+                />
+              </label>
+
+              <label className="pv-field">
+                <span className="pv-field-label">Category</span>
+                <select
+                  className="pv-input pv-select"
+                  value={categoryId}
+                  onChange={(e) => setCategoryId(e.target.value)}
+                  disabled={saving}
+                >
+                  <option value="">— none —</option>
+                  {suggestion?.allCategories.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="pv-field">
+                <span className="pv-field-label">Rarity</span>
+                <select
+                  className="pv-input pv-select"
+                  value={rarity}
+                  onChange={(e) => setRarity(e.target.value)}
+                  disabled={saving}
+                >
+                  {RARITY_OPTIONS.map((r) => <option key={r} value={r}>{r}</option>)}
+                </select>
+              </label>
+
+              <label className="pv-field">
+                <span className="pv-field-label">Type</span>
+                <select
+                  className="pv-input pv-select"
+                  value={type}
+                  onChange={(e) => setType(e.target.value)}
+                  disabled={saving}
+                >
+                  {TYPE_OPTIONS.map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </label>
+
+              <label className="pv-field">
+                <span className="pv-field-label">Pricing</span>
+                <select
+                  className="pv-input pv-select"
+                  value={pricing}
+                  onChange={(e) => setPricing(e.target.value)}
+                  disabled={saving}
+                >
+                  {PRICING_OPTIONS.map((p) => <option key={p} value={p}>{p}</option>)}
+                </select>
+              </label>
+
+              <label className="pv-field">
+                <span className="pv-field-label">Status</span>
+                <select
+                  className="pv-input pv-select"
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value)}
+                  disabled={saving}
+                >
+                  {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </label>
+            </div>
+
+            {err ? <div className="pv-msg pv-msg-err"><span>{err}</span></div> : null}
+
+            <div className="pv-actions">
+              <button
+                type="button"
+                className="pv-btn pv-btn-ghost"
+                onClick={() => setStep("input")}
+                disabled={saving}
+              >
+                ← Back
+              </button>
+              <button
+                type="button"
+                className="pv-btn pv-btn-primary"
+                onClick={handleCommit}
+                disabled={saving || !!existing || !name.trim()}
+              >
+                {saving ? "Saving…" : "Save to Library"}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
