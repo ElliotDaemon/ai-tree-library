@@ -12,6 +12,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { upload } from "@vercel/blob/client";
 import type { DashboardData, DashboardEntry, DashboardArticle } from "../../lib/portal-data";
 
@@ -660,6 +661,7 @@ function ArticleRow({
 const TINT_OPTIONS = ["cyan", "purple", "pink", "gold"] as const;
 
 function ArticleEditor({ article }: { article: DashboardArticle }) {
+  const router = useRouter();
   const [title, setTitle] = useState(article.title);
   const [excerpt, setExcerpt] = useState(article.excerpt);
   const [coverTint, setCoverTint] = useState(article.coverTint || "cyan");
@@ -712,16 +714,20 @@ function ArticleEditor({ article }: { article: DashboardArticle }) {
     setSaving(true);
     setMsg(null);
     try {
+      // ALWAYS send the full editable state — not just diffs. The
+      // overlay writer merges with whatever it reads back from Blob,
+      // and Blob has eventual consistency: a read right after a write
+      // can return stale/empty, which would silently drop the
+      // previously-set hero image. Sending the full state means
+      // every Save fully overwrites the overlay with the truth from
+      // the portal — no merge race.
       const fields: Record<string, unknown> = {
-        // Pass slug so the server can revalidate the exact page path.
         __slugForRevalidate: article.slug,
+        title,
+        excerpt,
+        coverTint,
+        heroImageUrl: heroUrl.trim() || null,
       };
-      if (title !== article.title) fields.title = title;
-      if (excerpt !== article.excerpt) fields.excerpt = excerpt;
-      if (coverTint !== (article.coverTint || "cyan")) fields.coverTint = coverTint;
-      if ((heroUrl || null) !== (article.heroImageUrl || null)) {
-        fields.heroImageUrl = heroUrl.trim() || null;
-      }
       const res = await fetch("/api/portal/update-article", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -741,6 +747,10 @@ function ArticleEditor({ article }: { article: DashboardArticle }) {
         // force-dynamic server-side so the render itself is fresh.
         const viewUrl = `/article/${article.slug}?v=${Date.now()}`;
         setMsg({ kind: "ok", text: "Saved.", viewUrl });
+        // Re-fetch the portal data so the parent row's "hero set" pill
+        // (and any other prop-driven state) reflects the new values
+        // without needing a manual page reload.
+        router.refresh();
       } else {
         setMsg({
           kind: "ok",

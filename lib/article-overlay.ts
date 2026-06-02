@@ -67,17 +67,18 @@ export function getOverlay(id: string): Promise<ArticleOverlay | null> {
 /** Write an overlay for one article. Called by /api/portal/update-article
  *  immediately after the Notion write succeeds. Always overwrites in
  *  place — Notion remains the source of truth, this is just the live
- *  read cache. Returns the public URL of the written overlay (handy
- *  for debugging — the portal surfaces it in the Save response). */
+ *  read cache.
+ *
+ *  IMPORTANT: the caller should send the FULL editable state every
+ *  time, not just diffs. We used to merge with whatever fetchOverlay
+ *  returned, but Vercel Blob has eventual consistency on writes —
+ *  reading right after a write can come back null, which silently
+ *  dropped previously-set fields. The portal now always passes the
+ *  full set; this function just overwrites. */
 export async function writeOverlay(id: string, fields: ArticleOverlay): Promise<string | null> {
   if (!process.env.BLOB_READ_WRITE_TOKEN) return null;
-  const existing = (await fetchOverlayUncached(id)) ?? {};
-  const merged: ArticleOverlay = {
-    ...existing,
-    ...fields,
-    updatedAt: new Date().toISOString(),
-  };
-  const result = await put(OVERLAY_PATH(id), JSON.stringify(merged), {
+  const payload: ArticleOverlay = { ...fields, updatedAt: new Date().toISOString() };
+  const result = await put(OVERLAY_PATH(id), JSON.stringify(payload), {
     access: "public",
     contentType: "application/json",
     allowOverwrite: true,
