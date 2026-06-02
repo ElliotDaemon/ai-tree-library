@@ -11,7 +11,8 @@
     "build-llms-txt": "node scripts/build-llms-txt.mjs",
     "seed-library": "node scripts/seed-library-from-batches.mjs",
     "enrich": "node scripts/enrich-descriptions.mjs",
-    "seed-corpus": "node scripts/seed-from-corpus.mjs"
+    "seed-corpus": "node scripts/seed-from-corpus.mjs",
+    "seed-articles": "node scripts/seed-articles-v2.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.32.1",
