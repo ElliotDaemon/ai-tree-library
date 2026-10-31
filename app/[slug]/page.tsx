@@ -77,7 +77,7 @@ export default async function EntryPage({ params }: Props) {
           </div>
           <a className="shot" href={visit} target="_blank" rel="noopener" aria-label={`Preview of ${e.name}`}>
             <div className="chrome"><i /><i /><i /><span>{host}</span></div>
-            <Shot url={e.url} host={host} color={color} />
+            <Shot key={e.url} url={e.url} host={host} color={color} />
           </a>
         </div>
         {rel.length > 0 && (

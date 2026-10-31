@@ -5,7 +5,8 @@
 //   E edit name · O open link · U undo · / search · ⌘↵ commit
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { BRANCHES, KINDS, branchColor, classify, hostOf } from "@/lib/taxonomy.mjs";
+import { BRANCHES, KINDS, branchColor, canonicalKey, classify, hostOf, nameKey, siteOf } from "@/lib/taxonomy.mjs";
+import BulkAdd from "./BulkAdd";
 import type { Entry, QueueItem } from "@/lib/types";
 import { Favicon } from "./Card";
 import { ArrowIcon, CheckIcon, Mark, SearchIcon, XIcon } from "./Icons";
@@ -17,7 +18,7 @@ type Item = (QueueItem | Entry) & { _live?: boolean };
 type Patch = Partial<Entry & QueueItem>;
 interface Data { library: Entry[]; queue: QueueItem[]; rejected: string[]; mode: "github" | "local" | "readonly" }
 
-const ORIGINS: Record<string, string> = { community: "Community", bookmarks: "Bookmarks", review: "Old queue", legacy: "Previously live" };
+const ORIGINS: Record<string, string> = { community: "Community", bulk: "Bulk upload", bookmarks: "Bookmarks", review: "Old queue", legacy: "Previously live" };
 const STORE = "portal-stage-v1";
 
 export default function Portal() {
@@ -34,6 +35,7 @@ export default function Portal() {
   const [history, setHistory] = useState<string[]>([]);
   const [committing, setCommitting] = useState(false);
   const [toast, setToast] = useState("");
+  const [bulk, setBulk] = useState(false);
   const search = useRef<HTMLInputElement>(null);
   const nameField = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -72,6 +74,20 @@ export default function Portal() {
   }, [data, tab, q, origin, branchF, edits]);
 
   const cur = items[Math.min(cursor, items.length - 1)] as Item | undefined;
+
+  // possible duplicates: the same product (same canonical URL or the same name on the same site),
+  // and, more softly, other links from the same site
+  const index = useMemo(() => {
+    const all: Item[] = data ? [...data.library.map((e) => ({ ...e, _live: true })), ...data.queue] : [];
+    const by = (f: (i: Item) => string) => { const m = new Map<string, Item[]>(); for (const i of all) { const k = f(i); if (k) (m.get(k) || m.set(k, []).get(k)!).push(i); } return m; };
+    return { canon: by((i) => canonicalKey(i.url)), site: by((i) => siteOf(i.url)), name: by((i) => nameKey(i.name)) };
+  }, [data]);
+  const dupesOf = (i: Item) => {
+    const strong = new Map<string, Item>();
+    for (const o of [...(index.canon.get(canonicalKey(i.url)) || []), ...(index.name.get(nameKey(i.name)) || []).filter((o) => siteOf(o.url) === siteOf(i.url))]) if (o.id !== i.id) strong.set(o.id, o);
+    const site = (index.site.get(siteOf(i.url)) || []).filter((o) => o.id !== i.id && !strong.has(o.id));
+    return { strong: [...strong.values()], site };
+  };
   const view = cur ? { ...cur, ...edits[cur.id] } : undefined;
 
   // eslint-disable-next-line react-hooks/set-state-in-effect -- a new view starts at the top
@@ -194,6 +210,7 @@ export default function Portal() {
           <span className="mono">{pct}%</span>
         </div>
         <span className="spacer" />
+        <button className="pill sm accent" onClick={() => setBulk(true)}>+ Add links</button>
         <span className={`pt-mode ${data.mode}`}>{data.mode === "github" ? "Commits to GitHub" : data.mode === "local" ? "Local files" : "Read-only"}</span>
         <ThemeToggle />
         <form action="/api/portal/logout" method="post"><button className="pill sm ghost">Log out</button></form>
@@ -250,6 +267,7 @@ export default function Portal() {
                       <span className="mono">{hostOf(i.url)}</span>
                     </div>
                     <span className="swatch" style={{ "--c": b ? branchColor(b) : "transparent", boxShadow: b ? undefined : "inset 0 0 0 1px var(--faint)" } as React.CSSProperties} title={b || "No branch"} />
+                    {!a && tab === "queue" && dupesOf(i).strong.length > 0 && <span className="pt-badge dupe" title="Possible duplicate">2×</span>}
                     {a && <span className={`pt-badge ${a}`}>{a === "approve" ? "✓" : a === "reject" || a === "unpublish" ? "✕" : "…"}</span>}
                   </div>
                 );
@@ -265,6 +283,11 @@ export default function Portal() {
                   {"submittedAt" in view && <span className="muted mono" style={{ fontSize: 12 }}>{new Date(view.submittedAt || Date.now()).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span>}
                   {view.submitter && <span className="muted" style={{ fontSize: 12 }}>by @{view.submitter}</span>}
                   <span className="spacer" />
+                  {(() => { const d = dupesOf(view); return d.strong.length ? (
+                    <span className="pt-dupe strong">Duplicate of {d.strong.map((o) => `${o.name}${o._live ? " (live)" : ""}`).join(", ")}
+                      {tab === "queue" && <button className="pill sm" onClick={() => decide("reject")}>Decline as duplicate</button>}
+                    </span>
+                  ) : d.site.length ? <span className="pt-dupe">Also from this site: {d.site.slice(0, 3).map((o) => o.name).join(", ")}{d.site.length > 3 ? ` +${d.site.length - 3}` : ""}</span> : null; })()}
                   <a className="pill sm" href={view.url} target="_blank" rel="noopener">Open <ArrowIcon size={14} /> <kbd>O</kbd></a>
                 </div>
                 <div className="pt-grid">
@@ -329,6 +352,7 @@ export default function Portal() {
         </div>
       )}
 
+      {bulk && <BulkAdd onClose={() => { setBulk(false); setTab("queue"); setOrigin("bulk"); }} onDone={load} />}
       {(totalStaged > 0 || toast) && (
         <div className="pt-dock glass">
           {toast ? <span>{toast}</span> : <>

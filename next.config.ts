@@ -1,4 +1,10 @@
 import type { NextConfig } from "next";
+import { readFileSync } from "node:fs";
+
+// Pages merged into another keep working: data/redirects.json maps old slug → new slug.
+const merged: Record<string, string> = (() => {
+  try { return JSON.parse(readFileSync("data/redirects.json", "utf8")); } catch { return {}; }
+})();
 
 // Security headers applied site-wide.
 //   - HSTS: enforce HTTPS for 2 years incl. subdomains, eligible for preload list
@@ -35,6 +41,9 @@ const portalHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  async redirects() {
+    return Object.entries(merged).map(([from, to]) => ({ source: `/${from}`, destination: `/${to}`, permanent: true }));
+  },
   async headers() {
     return [
       { source: "/:path*", headers: securityHeaders },

@@ -4,7 +4,7 @@
 // until its screenshot is ready; a real capture comes back at the width we asked for. So: load quietly
 // in the background, show our own glass skeleton meanwhile, retry with backoff, and if it never arrives
 // (many sites block capture) say so quietly over the site's icon.
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { shotUrl } from "@/lib/shot";
 
 
@@ -15,45 +15,38 @@ export default function Shot({ url, host, color = "#3987e5", width = 1200, heigh
 }) {
   const [src, setSrc] = useState<string | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
-  const run = useRef(0);
 
-  const load = useCallback(() => {
-    const id = ++run.current;
-    setState("loading");
-    setSrc(null);
-    let attempt = 0;
-    let timer: ReturnType<typeof setTimeout>;
+  // Parents give each URL its own <Shot key=…>, so a fresh mount always starts at "loading".
+  useEffect(() => {
+    let alive = true, attempt = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     const tryOnce = () => {
-      if (id !== run.current) return;
+      if (!alive) return;
       const probe = new Image();
       const u = `${shotUrl(url, width, height)}${attempt ? `&r=${attempt}` : ""}`;
       probe.onload = () => {
-        if (id !== run.current) return;
-        if (probe.naturalWidth >= width * 0.9) { setSrc(u); setState("ready"); return; } // the real capture
-        next(); // the placeholder: wait and ask again
+        if (!alive) return;
+        if (probe.naturalWidth >= width * 0.9) { setSrc(u); setState("ready"); } // the real capture
+        else next(); // the placeholder: wait and ask again
       };
       probe.onerror = next;
       probe.src = u;
     };
     const next = () => {
       attempt++;
-      if (attempt >= WAITS.length) { if (id === run.current) setState("failed"); return; }
+      if (attempt >= WAITS.length) { if (alive) setState("failed"); return; }
       timer = setTimeout(tryOnce, WAITS[attempt]);
     };
     tryOnce();
-    return () => clearTimeout(timer);
-  }, [url, width, height]);
-
-  useEffect(() => {
-    const stop = load();
     // in parallel: if the site shows bot checks, a capture would be of the check page, so never show it
     const ctrl = new AbortController();
     fetch(`/api/shot-check?url=${encodeURIComponent(url)}`, { signal: ctrl.signal })
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => { if (d?.blocked) { run.current++; setSrc(null); setState("failed"); } })
+      .then((d) => { if (alive && d?.blocked) { alive = false; clearTimeout(timer); setSrc(null); setState("failed"); } })
       .catch(() => {});
-    return () => { stop?.(); ctrl.abort(); run.current++; };
-  }, [load, url]);
+    return () => { alive = false; clearTimeout(timer); ctrl.abort(); };
+  }, [url, width, height]);
+
 
   return (
     <div className={`shot-body ${state} ${className}`} style={{ "--c": color } as React.CSSProperties} aria-busy={state === "loading"}>

@@ -46,3 +46,31 @@
 .pt-declined { padding-top: 24px; overflow-y: auto; }
 .login { min-height: 100dvh; display: grid; place-items: center; padding: 20px; }
 .login .sheet { width: min(400px, 100%); }
+
+.pt-dupe { display: inline-flex; align-items: center; gap: 8px; font-size: var(--size-meta); color: var(--muted); }
+.pt-dupe.strong { color: var(--warn); }
+.pt-badge.dupe { width: auto; padding: 0 6px; border-radius: 999px; background: color-mix(in oklab, var(--warn) 85%, transparent); font-size: 10px; }
+
+/* bulk add */
+.bulk-scrim { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; padding: 20px; background: rgba(0, 0, 0, 0.45); backdrop-filter: blur(6px); animation: f3-fade 200ms ease both; }
+.bulk { width: min(720px, 100%); max-height: calc(100dvh - 40px); display: grid; gap: 14px; overflow: hidden; grid-template-rows: auto 1fr auto; }
+.bulk header { display: flex; justify-content: space-between; align-items: start; }
+.bulk h2 { margin: 4px 0 0; font-size: 22px; letter-spacing: -0.02em; }
+.bulk-paste { min-height: 200px; font: 13px/1.6 var(--font-mono); }
+.bulk-drop { position: relative; display: grid; place-items: center; min-height: 64px; border-radius: 16px; font-size: var(--size-control); color: var(--muted); box-shadow: inset 0 0 0 1px var(--line-2); background: repeating-linear-gradient(135deg, transparent 0 10px, color-mix(in oklab, var(--fg) 3%, transparent) 10px 11px); cursor: pointer; }
+.bulk-drop input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.bulk-drop b { color: var(--fg); }
+.bulk-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.bulk-progress { display: grid; gap: 12px; min-height: 0; grid-template-rows: auto auto 1fr auto; }
+.bulk-progress .bar { height: 3px; border-radius: 3px; background: var(--line-2); overflow: hidden; }
+.bulk-progress .bar i { display: block; height: 100%; background: var(--accent); transition: width 400ms var(--curve-settle); }
+.bulk-tally { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+.bulk-tally .spacer { flex: 1; }
+.bulk-list { overflow-y: auto; max-height: 46dvh; display: grid; align-content: start; gap: 2px; }
+.bulk-row { display: grid; grid-template-columns: 8px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 6px 4px; font-size: 13px; }
+.bulk-row .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--faint); }
+.bulk-row.added .dot { background: var(--good); }
+.bulk-row.skipped .dot, .bulk-row.declined .dot { background: var(--warn); }
+.bulk-row.invalid .dot { background: var(--bad); }
+.bulk-row .nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bulk-row .st { font-size: 11px; color: var(--muted); }
