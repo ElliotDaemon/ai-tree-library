@@ -12,7 +12,7 @@ import { ImageResponse } from "next/og";
 import { promises as fs } from "node:fs";
 import { join } from "node:path";
 
-export const alt = "AI Tree Library — a 3D constellation of curated AI tools, design inspo & creative resources";
+export const alt = "AI Tree Library — the open library of the useful internet";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -186,7 +186,7 @@ export default async function OGImage() {
                 display: "flex",
               }}
             >
-              A living constellation of curated tools.
+              The open library of the useful internet.
             </div>
             <div
               style={{
@@ -198,7 +198,7 @@ export default async function OGImage() {
                 display: "flex",
               }}
             >
-              AI tools · design inspo · creative resources — explored in 3D.
+              Websites · AI tools · apps · extensions — reviewed by people.
             </div>
           </div>
 
