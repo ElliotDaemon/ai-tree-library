@@ -1,261 +1,61 @@
-// Data load + lookup helpers used by the tool/category pages, sitemap, etc.
-// Reads public/library.json (built by scripts/fetch-content.mjs).
-
+// Build-time reads of the published library (data/library.json). Every public page is static.
 import { promises as fs } from "node:fs";
 import { join } from "node:path";
 import { cache } from "react";
-import { slugify } from "./slug";
+import { BRANCHES, branchColor, hostOf } from "./taxonomy.mjs";
+import type { Entry, Row } from "./types";
 
-export interface LibraryEntry {
-  id: string;
-  name: string;
-  slug: string; // computed in fetch-content.mjs
-  url: string;
-  type: string;
-  description: string;
-  longDescription?: string;
-  categoryId: string | null;
-  tags: string[];
-  pricing: string;
-  featured: boolean;
-  gem: boolean;
-  rarity?: string;
-  logoUrl: string;
-  screenshotUrl: string;
-  source: string;
-}
+export const SITE = "https://aitreelibrary.com";
 
-export interface LibraryCategory {
-  id: string;
-  name: string;
-  slug: string; // URL-safe slug from fetch-content.mjs
-  color: string;
-  description?: string;
-  parentName: string;
-  isTopLevel: boolean;
-  displayOrder: number;
-  v1ToolCount: number;
-}
-
-export interface LibraryStats {
-  categories: number;
-  topLevel: number;
-  entries: number;
-  featured: number;
-  gems: number;
-}
-
-export interface LibraryFile {
-  generatedAt: string;
-  stats: LibraryStats;
-  categories: LibraryCategory[];
-  entries: LibraryEntry[];
-  layout: {
-    nodes: Array<unknown>;
-    links: Array<{ source: string; target: string; kind: string }>;
-  };
-}
-
-/**
- * Load library.json once per request. `cache()` dedupes calls within a single
- * server render — multiple components can call `loadLibrary()` and we only
- * hit the filesystem once.
- */
-export const loadLibrary = cache(async (): Promise<LibraryFile | null> => {
+export const loadLibrary = cache(async (): Promise<Entry[]> => {
   try {
-    const raw = await fs.readFile(join(process.cwd(), "public", "library.json"), "utf8");
-    return JSON.parse(raw) as LibraryFile;
+    const list = JSON.parse(await fs.readFile(join(process.cwd(), "data", "library.json"), "utf8")) as Entry[];
+    return list.sort((a, b) => (b.added || "").localeCompare(a.added || "") || a.name.localeCompare(b.name));
   } catch {
-    return null;
+    return [];
   }
 });
 
-export async function getAllEntrySlugs(): Promise<string[]> {
+export async function findEntry(id: string) {
+  return (await loadLibrary()).find((e) => e.id === id) ?? null;
+}
+
+export async function branchStats() {
   const lib = await loadLibrary();
-  if (!lib) return [];
-  return lib.entries.map((e) => e.slug).filter(Boolean);
+  return BRANCHES.map((b) => ({
+    id: b.id,
+    name: b.name,
+    blurb: b.blurb,
+    color: branchColor(b.id),
+    count: lib.filter((e) => e.branch === b.id).length,
+    subs: b.subs.map((s) => ({ id: s.id, name: s.name, count: lib.filter((e) => e.branch === b.id && e.sub === s.id).length })),
+  }));
 }
 
-export async function getAllCategorySlugs(): Promise<string[]> {
+/** Same sub-branch first, then same branch, then shared tags. */
+export async function related(entry: Entry, n = 6) {
   const lib = await loadLibrary();
-  if (!lib) return [];
-  return lib.categories.filter((c) => c.isTopLevel).map((c) => c.slug).filter(Boolean);
+  const score = (e: Entry) =>
+    (e.sub === entry.sub ? 4 : 0) + (e.branch === entry.branch ? 2 : 0) + e.tags.filter((t) => entry.tags.includes(t)).length;
+  return lib
+    .filter((e) => e.id !== entry.id)
+    .map((e) => [score(e), e] as const)
+    .filter(([s]) => s > 1)
+    .sort((a, b) => b[0] - a[0])
+    .slice(0, n)
+    .map(([, e]) => e);
 }
 
-export async function findEntryBySlug(slug: string): Promise<LibraryEntry | null> {
-  const lib = await loadLibrary();
-  if (!lib) return null;
-  return lib.entries.find((e) => e.slug === slug) ?? null;
-}
-
-export async function findCategoryBySlug(slug: string): Promise<LibraryCategory | null> {
-  const lib = await loadLibrary();
-  if (!lib) return null;
-  return lib.categories.find((c) => c.slug === slug && c.isTopLevel) ?? null;
-}
-
-export async function findCategoryById(id: string): Promise<LibraryCategory | null> {
-  const lib = await loadLibrary();
-  if (!lib) return null;
-  return lib.categories.find((c) => c.id === id) ?? null;
-}
-
-/**
- * Returns the top-level parent category for a given subcategory (or the
- * category itself if it's already top-level).
- */
-export async function topLevelOf(category: LibraryCategory): Promise<LibraryCategory | null> {
-  if (category.isTopLevel) return category;
-  const lib = await loadLibrary();
-  if (!lib) return null;
-  return lib.categories.find((c) => c.isTopLevel && c.name === category.parentName) ?? null;
-}
-
-export async function entriesInTopLevelCategory(topLevelSlug: string): Promise<LibraryEntry[]> {
-  const lib = await loadLibrary();
-  if (!lib) return [];
-  const top = lib.categories.find((c) => c.slug === topLevelSlug && c.isTopLevel);
-  if (!top) return [];
-  const subIds = new Set(
-    lib.categories.filter((c) => !c.isTopLevel && c.parentName === top.name).map((c) => c.id)
-  );
-  // entry.categoryId points at a SUBCATEGORY in our schema
-  return lib.entries.filter((e) => e.categoryId && subIds.has(e.categoryId));
-}
-
-export async function subcategoriesOf(topLevelSlug: string): Promise<LibraryCategory[]> {
-  const lib = await loadLibrary();
-  if (!lib) return [];
-  const top = lib.categories.find((c) => c.slug === topLevelSlug && c.isTopLevel);
-  if (!top) return [];
-  return lib.categories
-    .filter((c) => !c.isTopLevel && c.parentName === top.name)
-    .sort((a, b) => a.displayOrder - b.displayOrder);
-}
-
-/**
- * Related entries — same subcategory first, then siblings in same top-level
- * category, then anything sharing 2+ tags. Self excluded.
- */
-export async function relatedEntries(entry: LibraryEntry, n = 8): Promise<LibraryEntry[]> {
-  const lib = await loadLibrary();
-  if (!lib) return [];
-  const out: LibraryEntry[] = [];
-  const taken = new Set<string>([entry.id]);
-
-  // Same subcategory
-  if (entry.categoryId) {
-    for (const e of lib.entries) {
-      if (taken.has(e.id)) continue;
-      if (e.categoryId === entry.categoryId) {
-        out.push(e);
-        taken.add(e.id);
-        if (out.length >= n) return out;
-      }
-    }
-  }
-
-  // Same top-level category (different subcat)
-  const sub = entry.categoryId ? lib.categories.find((c) => c.id === entry.categoryId) : null;
-  if (sub) {
-    const top = lib.categories.find((c) => c.isTopLevel && c.name === sub.parentName);
-    if (top) {
-      const siblingSubIds = new Set(
-        lib.categories.filter((c) => !c.isTopLevel && c.parentName === top.name).map((c) => c.id)
-      );
-      for (const e of lib.entries) {
-        if (taken.has(e.id)) continue;
-        if (e.categoryId && siblingSubIds.has(e.categoryId)) {
-          out.push(e);
-          taken.add(e.id);
-          if (out.length >= n) return out;
-        }
-      }
-    }
-  }
-
-  // Shared tags (2+)
-  const myTags = new Set(entry.tags);
-  if (myTags.size >= 2) {
-    for (const e of lib.entries) {
-      if (taken.has(e.id)) continue;
-      const overlap = e.tags.filter((t) => myTags.has(t)).length;
-      if (overlap >= 2) {
-        out.push(e);
-        taken.add(e.id);
-        if (out.length >= n) return out;
-      }
-    }
-  }
-
-  return out;
-}
-
-export type RarityTier = "legendary" | "established" | "rare" | "gem";
-
-export function rarityMeta(rarity?: string): { tier: RarityTier; label: string; icon: string } {
-  if (!rarity) return { tier: "established", label: "Established", icon: "⭐" };
-  // Accept both raw lowercase values (from layout.nodes) and Notion-display
-  // values (with capitals + spaces) so callers don't have to normalize.
-  const r = rarity.toLowerCase();
-  if (r.includes("legendary")) return { tier: "legendary", label: "Legendary", icon: "👑" };
-  if (r.includes("gem")) return { tier: "gem", label: "Hidden Gem", icon: "🌟" };
-  if (r.includes("rare")) return { tier: "rare", label: "Rare", icon: "💎" };
-  return { tier: "established", label: "Established", icon: "⭐" };
-}
-
-/** All entries belonging to a given rarity tier. */
-export async function entriesByRarity(tier: RarityTier): Promise<LibraryEntry[]> {
-  const lib = await loadLibrary();
-  if (!lib) return [];
-  return lib.entries.filter((e) => rarityMeta(e.rarity).tier === tier);
-}
-
-/**
- * Returns one entry per unique tag slug, along with the original display name
- * and the count of entries carrying it. Filters out empty tags.
- */
-export async function getAllTags(): Promise<Array<{ slug: string; name: string; count: number }>> {
-  const lib = await loadLibrary();
-  if (!lib) return [];
-  const seen = new Map<string, { name: string; count: number }>();
-  for (const e of lib.entries) {
-    for (const t of e.tags ?? []) {
-      const s = slugify(t);
-      if (!s) continue;
-      const existing = seen.get(s);
-      if (existing) existing.count++;
-      else seen.set(s, { name: t, count: 1 });
-    }
-  }
-  return Array.from(seen.entries())
-    .map(([slug, v]) => ({ slug, ...v }))
-    .sort((a, b) => b.count - a.count);
-}
-
-export async function findEntriesByTagSlug(tagSlug: string): Promise<{
-  name: string;
-  entries: LibraryEntry[];
-}> {
-  const lib = await loadLibrary();
-  if (!lib) return { name: "", entries: [] };
-  let name = "";
-  const entries = lib.entries.filter((e) => {
-    for (const t of e.tags ?? []) {
-      if (slugify(t) === tagSlug) {
-        if (!name) name = t;
-        return true;
-      }
-    }
-    return false;
-  });
-  return { name, entries };
-}
-
-export function hostnameOf(url: string): string {
-  try {
-    return new URL(url).hostname.replace(/^www\./, "");
-  } catch {
-    return url;
-  }
-}
+export const toRow = (e: Entry): Row => ({
+  i: e.id,
+  n: e.name,
+  h: hostOf(e.url),
+  d: e.description.length > 160 ? `${e.description.slice(0, 157).trim()}…` : e.description,
+  b: e.branch,
+  s: e.sub,
+  k: e.kind,
+  t: e.tags,
+  ...(e.featured ? { f: 1 as const } : {}),
+  ...(e.gem ? { g: 1 as const } : {}),
+  a: (e.added || "").slice(0, 10),
+});

@@ -28,5 +28,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# Generated content
-public/library.json
+# Generated at build (scripts/build-index.mjs)
+public/api/
+public/llms.txt

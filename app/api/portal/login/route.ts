@@ -23,7 +23,7 @@ import {
   SESSION_MAX_AGE_SEC,
   signSession,
   verifyCredentials,
-} from "@/lib/portal-auth";
+} from "@/lib/auth";
 import { hitRateLimit, clearRateLimit } from "@/lib/rate-limit";
 
 // Use Node runtime so the in-memory rate limiter survives across
