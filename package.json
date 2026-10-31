@@ -3,19 +3,22 @@
   "version": "3.0.0",
   "private": true,
   "scripts": {
-    "dev": "node scripts/build-index.mjs && next dev",
-    "build": "node scripts/build-index.mjs && next build",
+    "dev": "node scripts/build-index.mjs && node scripts/build-graph.mjs && next dev",
+    "build": "node scripts/build-index.mjs && node scripts/build-graph.mjs && next build",
     "start": "next start",
     "lint": "eslint",
     "import-bookmarks": "node scripts/import-bookmarks.mjs",
-    "build-index": "node scripts/build-index.mjs"
+    "build-index": "node scripts/build-index.mjs",
+    "build-graph": "node scripts/build-graph.mjs"
   },
   "dependencies": {
+    "@types/three": "^0.171.0",
     "@vercel/analytics": "^2.0.1",
     "@vercel/speed-insights": "^2.0.0",
     "next": "16.2.6",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "three": "^0.171.0"
   },
   "devDependencies": {
     "@types/node": "^20",

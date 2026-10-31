@@ -50,6 +50,7 @@ export const toRow = (e: Entry): Row => ({
   i: e.id,
   n: e.name,
   h: hostOf(e.url),
+  u: e.url,
   d: e.description.length > 160 ? `${e.description.slice(0, 157).trim()}…` : e.description,
   b: e.branch,
   s: e.sub,

@@ -12,7 +12,7 @@ const { library } = await readData();
 library.sort((a, b) => (b.added || "").localeCompare(a.added || "") || a.name.localeCompare(b.name));
 
 const rows = library.map((e) => ({
-  i: e.id, n: e.name, h: hostOf(e.url),
+  i: e.id, n: e.name, h: hostOf(e.url), u: e.url,
   d: e.description.length > 160 ? `${e.description.slice(0, 157).trim()}…` : e.description,
   b: e.branch, s: e.sub, k: e.kind, t: e.tags,
   ...(e.featured ? { f: 1 } : {}), ...(e.gem ? { g: 1 } : {}),

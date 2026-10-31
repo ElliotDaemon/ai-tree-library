@@ -45,6 +45,7 @@ export interface Row {
   i: string; // id / slug
   n: string; // name
   h: string; // host
+  u?: string; // url
   d: string; // description
   b: string; // branch
   s: string; // sub
