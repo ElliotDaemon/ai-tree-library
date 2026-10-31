@@ -43,6 +43,7 @@ interface Engine {
   select: (i: number, fly?: boolean) => void;
   selectId: (id: string) => void;
   flyToBranch: (id: string) => void;
+  zoomedBranch: () => string | null;
   overview: () => void;
   surprise: () => void;
   move: (dx: number, dy: number) => void;
@@ -160,7 +161,7 @@ function createEngine(
   g: Graph,
   rowsById: Map<string, Row>,
   branches: FieldBranch[],
-  cb: { onSelect: (r: Row | null, related: Related[], canBack: boolean) => void; onEnter: () => void; onIdle: () => void; onDrift: (on: boolean) => void },
+  cb: { onSelect: (r: Row | null, related: Related[], canBack: boolean) => void; onEnter: () => void; onIdle: () => void; onDrift: (on: boolean) => void; onZoom: (branch: string | null) => void },
 ): Engine | null {
   const coarse = matchMedia("(pointer: coarse)").matches;
   let renderer: THREE.WebGLRenderer;
@@ -324,6 +325,7 @@ function createEngine(
     return el;
   };
   const bName = new Map(branches.map((b) => [b.id, b.name]));
+  const branchCount = new Map(g.branches.map((b) => [b.id, b.n]));
   const bLabels = g.branches.map((b) => ({ b, el: mk("f3-label", `<i style="--c:${branches.find((x) => x.id === b.id)?.color}"></i>${esc(bName.get(b.id) || b.id)}<span>${b.n}</span>`, () => { cb.onEnter(); engine.flyToBranch(b.id); }) }));
   const sLabels = g.subs.map((s) => ({ s, el: mk("f3-sub", esc(s.name)) }));
   const NL = 14;
@@ -352,9 +354,12 @@ function createEngine(
   const trail: number[] = [];
   let lastInput = performance.now();
   let focusBranch = "";
+  let zoomBranch: string | null = null; // the branch you zoomed into: others dim but stay clickable
+  const vis = new Float32Array(N).fill(1); // search/branch filter: hidden lights can't be picked
+  const fb = () => focusBranch || zoomBranch || "";
   let matchList: number[] = [], matchAt = -1;
   let drifting = false, driftNext = 0;
-  const visible = (i: number) => !!rows[i] && na[i] > 0.5;
+  const visible = (i: number) => !!rows[i] && vis[i] > 0.5;
 
   // ---------- projection helpers ----------
   const v = new THREE.Vector3();
@@ -373,10 +378,14 @@ function createEngine(
 
   // ---------- picking: exact, in the same space as the render ----------
   let mx = -1e4, my = -1e4, touch = false, pending = false;
+  const REGION = 70; // px: how far around the pointer we look to decide which branch's space you're in
   const pickAt = (x: number, y: number) => {
     // 1. a light the pointer is actually on: the front-most one wins, because that is the one you see
     // 2. otherwise the nearest light within reach (fingers get more slack than a mouse)
+    // 3. otherwise, the branch that dominates the space around the pointer (lights weighted by closeness),
+    //    so clicking between lights zooms into that branch instead of doing nothing
     let onTop = -1, onTopZ = Infinity, near = -1, nearScore = Infinity;
+    const weight = new Map<string, number>();
     for (let i = 0; i < N; i++) {
       if (!visible(i)) continue;
       const s = toScreen(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]);
@@ -385,18 +394,24 @@ function createEngine(
       if (d <= r + 1.5) { if (s.z < onTopZ) { onTopZ = s.z; onTop = i; } continue; }
       const reach = r + (touch ? 18 : 8);
       if (d <= reach && d / reach < nearScore) { nearScore = d / reach; near = i; }
+      if (d < REGION) { const b = rows[i]!.b; weight.set(b, (weight.get(b) || 0) + (1 - d / REGION) ** 2); }
     }
-    return onTop >= 0 ? onTop : near;
+    const node = onTop >= 0 ? onTop : near;
+    let region: string | null = null, best = 0.35; // need a few lights around before it counts as a branch
+    if (node < 0) for (const [b, w] of weight) if (w > best) { best = w; region = b; }
+    return { node, region, direct: onTop >= 0 };
   };
   const updateHover = () => {
     pending = false;
-    hover = mode === "explore" || !touch ? pickAt(mx, my) : -1;
-    canvas.style.cursor = hover >= 0 ? "pointer" : mode === "explore" ? "grab" : "pointer";
+    const hit = mode === "explore" || !touch ? pickAt(mx, my) : { node: -1, region: null };
+    hover = hit.node;
+    const region = hit.region && hit.region !== zoomBranch ? hit.region : null;
+    canvas.style.cursor = hover >= 0 ? "pointer" : region ? "zoom-in" : mode === "explore" ? "grab" : "pointer";
     const r = hover >= 0 ? rows[hover] : null;
-    if (r && !touch && hover !== sel) {
+    if (!touch && ((r && hover !== sel) || region)) {
       tipEl.style.display = "block";
       tipEl.style.transform = `translate(${mx}px, ${my}px)`;
-      tipEl.innerHTML = `<b>${esc(r.n)}</b><span>${esc(r.h)}</span>`;
+      tipEl.innerHTML = r ? `<b>${esc(r.n)}</b><span>${esc(r.h)}</span>` : `<b>${esc(bName.get(region!) || region!)}</b><span>Click to zoom in · ${branchCount.get(region!) || 0} links</span>`;
     } else tipEl.style.display = "none";
     refreshFocus();
   };
@@ -407,9 +422,13 @@ function createEngine(
   const onUp = (e: PointerEvent) => {
     if (Math.hypot(e.clientX - downX, e.clientY - downY) > (touch ? 10 : 5)) return;
     local(e);
-    const hit = pickAt(mx, my);
+    const { node, region, direct } = pickAt(mx, my);
     if (mode === "loop") cb.onEnter();
-    if (hit >= 0) engine.select(hit);
+    // fingers: at overview distance lights are a few pixels wide, so a tap that lands near (not on) a light
+    // in a branch you aren't zoomed into zooms into that branch first; a tap right on a light always opens it
+    if (touch && node >= 0 && !direct && rows[node]!.b !== zoomBranch) { engine.select(-1); engine.flyToBranch(rows[node]!.b); return; }
+    if (node >= 0) engine.select(node);
+    else if (region && region !== zoomBranch) { engine.select(-1); engine.flyToBranch(region); }
     else if (mode === "explore" && sel >= 0 && !touch) engine.select(-1);
   };
   const onLeave = () => { hover = -1; tipEl.style.display = "none"; refreshFocus(); };
@@ -536,7 +555,7 @@ function createEngine(
     placed.length = 0;
     if (mode === "explore") {
       const cr = canvas.getBoundingClientRect();
-      for (const el of labelsEl.parentElement!.querySelectorAll<HTMLElement>(".f3-branches, .f3-card, .f3-top, .f3-mobile")) {
+      for (const el of labelsEl.parentElement!.querySelectorAll<HTMLElement>(".f3-branches, .f3-card, .f3-top, .f3-mobile, .f3-zoom, .f3-hint")) {
         const b = el.getBoundingClientRect();
         if (b.width) placed.push([b.left - cr.left - 8, b.top - cr.top - 8, b.right - cr.left + 8, b.bottom - cr.top + 8]);
       }
@@ -571,20 +590,41 @@ function createEngine(
     for (const { s, el } of sLabels) {
       const sc = toScreen(s.c[0], s.c[1], s.c[2]);
       const d = camera.position.distanceTo(v.set(s.c[0], s.c[1], s.c[2]));
-      const op = explore && sc.ok && (!focusBranch || focusBranch === s.b) ? Math.max(0, Math.min(0.8, (R * 1.5 - d) / (R * 0.5))) * Math.min(1, (d - 3) / 4) : 0;
+      const op = explore && sc.ok && (!fb() || fb() === s.b) ? Math.max(0, Math.min(0.8, (R * 1.5 - d) / (R * 0.5))) * Math.min(1, (d - 3) / 4) : 0;
       show(el, sc.x, sc.y, op, 6);
     }
     // 4. branches from afar
     for (const { b, el } of bLabels) {
       const sc = toScreen(b.c[0], b.c[1] + b.r * 1.15, b.c[2]);
       const d = camera.position.distanceTo(v.set(b.c[0], b.c[1], b.c[2]));
-      const op = explore && sc.ok ? Math.max(0, Math.min(1, (d - R * 0.5) / (R * 0.6))) * (focusBranch && focusBranch !== b.id ? 0.35 : 1) : 0;
+      const op = explore && sc.ok ? Math.max(0, Math.min(1, (d - R * 0.5) / (R * 0.6))) * (fb() && fb() !== b.id ? 0.35 : 1) : 0;
       show(el, sc.x, sc.y, op, 10);
     }
     renderer.render(scene, camera);
   };
   raf = requestAnimationFrame(frame);
 
+  // what you see: filtered-out lights nearly vanish; outside a zoomed branch they dim but stay live
+  const applyAlpha = () => {
+    for (let i = 0; i < N; i++) {
+      const r = rows[i];
+      na[i] = !r ? 0.2 : vis[i] < 0.5 ? 0.1 : zoomBranch && r.b !== zoomBranch ? 0.3 : 1;
+    }
+    nodeGeo.attributes.alpha.needsUpdate = true;
+    for (let e = 0; e < E; e++) {
+      const a = g.edges[e * 3], b = g.edges[e * 3 + 1];
+      const both = na[a] > 0.9 && na[b] > 0.9, any = na[a] > 0.25 && na[b] > 0.25;
+      ea[e * 2] = ea[e * 2 + 1] = edgeBase[e] * (both ? 1 : any ? 0.3 : 0.12);
+    }
+    edgeGeo.attributes.a.needsUpdate = true;
+    refreshFocus();
+  };
+  const setZoom = (b: string | null) => {
+    if (zoomBranch === b) return;
+    zoomBranch = b;
+    applyAlpha();
+    cb.onZoom(b);
+  };
   const related = (i: number): Related[] => adj[i].filter(([j]) => rows[j]).slice(0, 6).map(([j, s]) => ({ row: rows[j]!, s }));
 
   const engine: Engine = {
@@ -594,6 +634,7 @@ function createEngine(
       if (sel >= 0 && sel !== i) trail.push(sel);
       if (trail.length > 24) trail.shift();
       sel = i;
+      if (zoomBranch && rows[i]!.b !== zoomBranch) setZoom(rows[i]!.b);
       refreshFocus();
       if (fly) flyTo(P(i), narrow ? 13 : 10);
       cb.onSelect(rows[i], related(i), trail.length > 0);
@@ -602,16 +643,19 @@ function createEngine(
     flyToBranch(id) {
       lastInput = performance.now();
       const b = g.branches.find((x) => x.id === id);
-      if (b) flyTo(new THREE.Vector3(b.c[0], b.c[1], b.c[2]), b.r * 3.2 + 8);
+      if (!b) return;
+      setZoom(id);
+      flyTo(new THREE.Vector3(b.c[0], b.c[1], b.c[2]), b.r * 2.6 + 7);
     },
     overview() {
       lastInput = performance.now();
       engine.select(-1);
+      setZoom(null);
       flyTo(center, dist0() * 0.85);
     },
     surprise() {
       const pool: number[] = [];
-      for (let i = 0; i < N; i++) if (visible(i) && i !== sel) pool.push(i);
+      for (let i = 0; i < N; i++) if (visible(i) && i !== sel && (!zoomBranch || rows[i]!.b === zoomBranch)) pool.push(i);
       if (pool.length) engine.select(pool[Math.floor(Math.random() * pool.length)]);
     },
     // spatial navigation: the related or nearby link best aligned with the direction pressed
@@ -696,6 +740,7 @@ function createEngine(
         controls.enabled = false;
         drifting = false;
         trail.length = 0;
+        setZoom(null);
         engine.select(-1);
         tween = { p0: camera.position.clone(), t0: controls.target.clone(), p1: null, t1: center.clone(), start: performance.now(), dur: 1800 };
       }
@@ -707,17 +752,12 @@ function createEngine(
       for (let i = 0; i < N; i++) {
         const r = rows[i];
         const on = !!r && (!f || r.b === f) && (!m || m.has(r.i));
-        na[i] = !r ? 0.2 : on ? 1 : 0.1;
+        vis[i] = on ? 1 : 0;
         if (on && m) matchList.push(i);
       }
-      nodeGeo.attributes.alpha.needsUpdate = true;
-      for (let e = 0; e < E; e++) {
-        const a = g.edges[e * 3], b = g.edges[e * 3 + 1];
-        ea[e * 2] = ea[e * 2 + 1] = na[a] > 0.5 && na[b] > 0.5 ? edgeBase[e] : edgeBase[e] * 0.12;
-      }
-      edgeGeo.attributes.a.needsUpdate = true;
-      refreshFocus();
+      applyAlpha();
     },
+    zoomedBranch: () => zoomBranch,
     dispose() {
       cancelAnimationFrame(raf);
       ro.disconnect(); io.disconnect();
@@ -739,6 +779,9 @@ function createEngine(
     (window as unknown as { __f3?: unknown }).__f3 = {
       n: N,
       at: (i: number) => { const r = canvas.getBoundingClientRect(); const s = toScreen(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]); return { x: r.left + s.x, y: r.top + s.y, ok: s.ok && visible(i), name: rows[i]?.n, r: drawnRadius(i) }; },
+      pick: (x: number, y: number, asTouch = false) => { const r = canvas.getBoundingClientRect(); const t = touch; touch = asTouch; const out = pickAt(x - r.left, y - r.top); touch = t; return out; },
+      branchAt: (id: string) => { const b = g.branches.find((q) => q.id === id)!; const r = canvas.getBoundingClientRect(); const s = toScreen(b.c[0], b.c[1], b.c[2]); return { x: r.left + s.x, y: r.top + s.y }; },
+      zoomed: () => zoomBranch,
       busy: () => !!tween || Math.abs(offY - (mode === "loop" ? (narrow ? 0.3 : 0.28) : narrow && sel >= 0 ? 0.2 : 0)) > 0.002,
     };
   }
@@ -756,6 +799,7 @@ export default function Field3D({ rows, branches, match, focus, query, onQuery, 
   const [closing, setClosing] = useState(false);
   const [sel, setSel] = useState<{ row: Row; related: Related[]; canBack: boolean } | null>(null);
   const [drifting, setDrifting] = useState(false);
+  const [zoomed, setZoomed] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   const filter = useRef({ match, focus });
 
@@ -790,6 +834,7 @@ export default function Field3D({ rows, branches, match, focus, query, onQuery, 
       onEnter: () => enter(),
       onIdle: () => exit(),
       onDrift: setDrifting,
+      onZoom: setZoomed,
     });
     if (!e) { queueMicrotask(() => setFailed(true)); return; }
     engine.current = e;
@@ -811,6 +856,7 @@ export default function Field3D({ rows, branches, match, focus, query, onQuery, 
         e.preventDefault();
         if (typing) (e.target as HTMLElement).blur();
         else if (sel) g.select(-1);
+        else if (g.zoomedBranch()) g.overview();
         else exit();
         return;
       }
@@ -865,10 +911,16 @@ export default function Field3D({ rows, branches, match, focus, query, onQuery, 
               <button className="pill ghost" onClick={() => engine.current?.overview()}>Overview <kbd>H</kbd></button>
               <button className="pill icon-btn" onClick={exit} aria-label="Close explorer"><XIcon size={16} /></button>
             </div>
+            {zoomed && (
+              <div className="f3-zoom">
+                <button className="pill sm" onClick={() => engine.current?.overview()} aria-label="Back to all branches">‹ All branches</button>
+                <span className="f3-zoom-name"><span className="swatch" style={{ "--c": branches.find((b) => b.id === zoomed)?.color } as React.CSSProperties} />{branches.find((b) => b.id === zoomed)?.name}<span className="n mono">{counts.get(zoomed)}</span></span>
+              </div>
+            )}
             <nav className="f3-branches" aria-label="Branches">
               <div className="eyebrow">Branches</div>
               {branches.filter((b) => counts.get(b.id)).map((b) => (
-                <button key={b.id} aria-pressed={focus === b.id} onClick={() => engine.current?.flyToBranch(b.id)}>
+                <button key={b.id} aria-pressed={focus === b.id || zoomed === b.id} onClick={() => engine.current?.flyToBranch(b.id)}>
                   <span className="swatch" style={{ "--c": b.color } as React.CSSProperties} />{b.name}<span className="n">{counts.get(b.id)}</span>
                 </button>
               ))}
@@ -907,11 +959,14 @@ export default function Field3D({ rows, branches, match, focus, query, onQuery, 
                 )}
               </article>
             ) : (
-              <p className="f3-hint mono">drag to orbit · scroll to zoom · arrows travel · tab through relations · B back · D drift</p>
+              <p className="f3-hint mono">
+                <span className="for-mouse">{zoomed ? "click a light to open it · click another cluster to move · esc for all branches" : "click a light to open it · click a cluster to zoom in · arrows travel · tab relations · D drift"}</span>
+                <span className="for-touch">{zoomed ? "tap a light to open it · tap another cluster to move · ‹ All branches to zoom out" : "tap a light to open it · tap a cluster to zoom in · pinch to zoom · drag to turn"}</span>
+              </p>
             )}
             {!s && (
               <div className="f3-mobile">
-                <p className="mono">drag to turn · pinch to zoom · tap a light</p>
+                <p className="mono">{zoomed ? "tap a light · tap another cluster to move" : "tap a light · tap a cluster to zoom in · pinch · drag"}</p>
                 <nav className="f3-rail" aria-label="Branches">
                   {branches.filter((b) => counts.get(b.id)).map((b) => (
                     <button key={b.id} className="pill sm" onClick={() => engine.current?.flyToBranch(b.id)}>
