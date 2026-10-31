@@ -8,7 +8,7 @@ import { NextResponse, after } from "next/server";
 import { shotUrl } from "@/lib/shot";
 import { isAdmin } from "@/lib/guard";
 import { mutateDb } from "@/lib/store";
-import { findSub, uniqueSlug, urlKey, cleanUrl, KINDS } from "@/lib/taxonomy.mjs";
+import { findSub, uniqueSlug, urlKey, canonicalKey, cleanUrl, KINDS } from "@/lib/taxonomy.mjs";
 import type { Entry, Kind, QueueItem } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -69,10 +69,10 @@ export async function POST(req: Request) {
         if (!q) { problems.push(`${d.id}: not in queue`); continue; }
         const merged = { ...q, ...patch };
         if (d.action === "defer") { queue.set(q.id, merged); tally.defer++; continue; }
-        if (d.action === "reject") { queue.delete(q.id); rejected.add(urlKey(q.url)); tally.reject++; continue; }
+        if (d.action === "reject") { queue.delete(q.id); rejected.add(urlKey(q.url)); rejected.add(canonicalKey(q.url)); tally.reject++; continue; }
         // approve
         if (!findSub(merged.branch, merged.sub)) { problems.push(`${merged.name}: pick a branch first`); continue; }
-        const dupe = [...library.values()].find((e) => urlKey(e.url) === urlKey(merged.url));
+        const dupe = [...library.values()].find((e) => urlKey(e.url) === urlKey(merged.url) || canonicalKey(e.url) === canonicalKey(merged.url));
         if (dupe) { queue.delete(q.id); problems.push(`${merged.name}: already live as /${dupe.id}`); continue; }
         const id = merged.slug && !taken.has(merged.slug) ? (taken.add(merged.slug), merged.slug) : uniqueSlug(merged.name, taken);
         const entry: Entry = {

@@ -4,7 +4,7 @@ import { readMeta } from "@/lib/meta";
 import { mutateDb } from "@/lib/store";
 import { clientIp } from "@/lib/guard";
 import { hitRateLimit } from "@/lib/rate-limit";
-import { KINDS, findSub, urlKey } from "@/lib/taxonomy.mjs";
+import { KINDS, canonicalKey, findSub, urlKey } from "@/lib/taxonomy.mjs";
 import type { Kind, QueueItem } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -42,9 +42,10 @@ export async function POST(req: Request) {
   let status = "queued" as "queued" | "exists" | "declined";
   try {
     await mutateDb(`queue: ${meta.host}`, (db) => {
-      if (db.library.some((e) => urlKey(e.url) === key)) return void (status = "exists"), null;
-      if (db.queue.some((e) => urlKey(e.url) === key)) return void (status = "exists"), null;
-      if (db.rejected.includes(key)) return void (status = "declined"), null;
+      const ck = canonicalKey(meta.url);
+      const same = (u: string) => urlKey(u) === key || canonicalKey(u) === ck;
+      if (db.library.some((e) => same(e.url)) || db.queue.some((e) => same(e.url))) return void (status = "exists"), null;
+      if (db.rejected.includes(key) || db.rejected.includes(ck)) return void (status = "declined"), null;
       if (db.queue.length > 5000) throw new Error("Queue is full");
       const item: QueueItem = {
         id: `q-${key.replace(/[^a-z0-9]+/g, "-").slice(0, 48)}-${Date.now().toString(36)}`,

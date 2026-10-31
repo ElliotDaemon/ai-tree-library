@@ -7,8 +7,9 @@
 // accounts, dashboards, docs, socials and anything carrying a token never leave your machine.
 
 import { readFile } from "node:fs/promises";
-import { classify, cleanUrl, detectKind, hostOf, suggestTags, tidyName, urlKey } from "../lib/taxonomy.mjs";
+import { canonicalKey, classify, cleanUrl, detectKind, hostOf, suggestTags, tidyName, urlKey } from "../lib/taxonomy.mjs";
 import { readData, writeData } from "./data-io.mjs";
+import { PRIVATE_FOLDER, PRIVATE_HOST, PRIVATE_PATH } from "../lib/import-filters.mjs";
 
 const file = process.argv[2];
 const dry = process.argv.includes("--dry");
@@ -17,12 +18,6 @@ if (!file) {
   process.exit(1);
 }
 
-// Folders whose links are personal, not library material.
-const PRIVATE_FOLDER = /(official roster|\/projects$|proton|\/save$|\/wix$|\/x$|youtube|\/google$|11:11 inc|global & ip|\/ir$|\/re$|data recovery)/i;
-// Hosts that are accounts, personal properties or platforms too generic to list.
-const PRIVATE_HOST = /(^|\.)(google\.com|youtube\.com|youtu\.be|x\.com|twitter\.com|instagram\.com|facebook\.com|linkedin\.com|tiktok\.com|reddit\.com|notion\.so|notion\.site|proton\.me|wix\.com|editorx\.com|1111[a-z]*\.(com|org)|elliotdaemon\.com|alinacak\.com|sparkwrld\.com|aitreelibrary\.com|vercel\.app|localhost|amazon\.[a-z.]+|ebay\.[a-z.]+|paypal\.com|stripe\.com|dropbox\.com|wetransfer\.com|we\.tl|bit\.ly|linktr\.ee|t\.co|spotify\.com|apple\.com|icloud\.com|microsoft\.com|live\.com|outlook\.com|gmail\.com|whatsapp\.com|discord\.(com|gg)|zoom\.us|calendly\.com|airtable\.com|canva\.com|slack\.com|twitch\.tv|docusign\.(com|net)|thinkific\.com|quora\.com|worldcat\.org|bookshop\.org|bankrate\.com|rollingstone\.com|ign\.com|xda-developers\.com|sahibinden\.com|disneyplus\.com|crunchyroll\.com|tvplus\.com\.tr)$/i;
-// Paths that point inside an account rather than at a product.
-const PRIVATE_PATH = /^chrome|^https:\/\/(my|labels|admin|console)\.|\/~|\/(backstage|watchlist|password|bank|dashboard|admin|account|settings|billing|login|signin|sign-in|signup|sign-up|auth|edit|invoice|inbox|checkout|cart|my-|profile|projects?\/[a-z0-9-]{8,}|d\/[a-z0-9_-]{20,})|[?&](token|key|code|session|sig|auth)=/i;
 
 function parse(html) {
   const out = [];
@@ -43,7 +38,7 @@ function parse(html) {
 const html = await readFile(file, "utf8");
 const marks = parse(html);
 const { library, queue, rejected } = await readData();
-const seen = new Set([...library.map((e) => urlKey(e.url)), ...queue.map((e) => urlKey(e.url)), ...rejected.map(urlKey)]);
+const seen = new Set([...library.flatMap((e) => [urlKey(e.url), canonicalKey(e.url)]), ...queue.flatMap((e) => [urlKey(e.url), canonicalKey(e.url)]), ...rejected]);
 
 const now = new Date().toISOString();
 let added = 0, skipped = 0;
@@ -57,8 +52,8 @@ for (const b of marks) {
   const store = ["ios", "android", "extension", "desktop"].includes(kind);
   const front = store ? url : u.pathname.split("/").filter(Boolean).length > 1 ? `${u.origin}/` : `${u.origin}${u.pathname}`;
   const key = urlKey(front);
-  if (seen.has(key)) { skipped++; continue; }
-  seen.add(key);
+  if (seen.has(key) || seen.has(canonicalKey(front))) { skipped++; continue; }
+  seen.add(key); seen.add(canonicalKey(front));
   const collapsed = front !== url;
   const hostWord = host.split(".").slice(-2, -1)[0] || host;
   const titled = tidyName(b.title, front);
