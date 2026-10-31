@@ -10,6 +10,7 @@ import type { Entry, QueueItem } from "@/lib/types";
 import { Favicon } from "./Card";
 import { ArrowIcon, CheckIcon, Mark, SearchIcon, XIcon } from "./Icons";
 import ThemeToggle from "./ThemeToggle";
+import Shot from "./Shot";
 
 type Action = "approve" | "reject" | "defer" | "unpublish";
 type Item = (QueueItem | Entry) & { _live?: boolean };
@@ -269,8 +270,7 @@ export default function Portal() {
                 <div className="pt-grid">
                   <div className="shot pt-shot">
                     <div className="chrome"><i /><i /><i /><span>{hostOf(view.url)}</span></div>
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img key={view.url} src={`https://s0.wp.com/mshots/v1/${encodeURIComponent(view.url)}?w=1000&h=625`} alt="" />
+                    <Shot key={view.url} url={view.url} host={hostOf(view.url)} color={view.branch ? branchColor(view.branch) : undefined} width={1000} height={625} />
                   </div>
                   <div className="pt-form">
                     <label className="field"><span>Name</span><input ref={nameField} className="input" value={view.name} onChange={(e) => patch({ name: e.target.value })} /></label>

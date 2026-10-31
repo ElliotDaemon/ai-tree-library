@@ -4,7 +4,8 @@
 //   defer     queue item stays, edits saved
 //   update    library entry edited in place
 //   unpublish library entry → back to the queue
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
+import { shotUrl } from "@/lib/shot";
 import { isAdmin } from "@/lib/guard";
 import { mutateDb } from "@/lib/store";
 import { findSub, uniqueSlug, urlKey, cleanUrl, KINDS } from "@/lib/taxonomy.mjs";
@@ -39,10 +40,12 @@ export async function POST(req: Request) {
 
   const tally = { approve: 0, reject: 0, defer: 0, update: 0, unpublish: 0 } as Record<Action, number>;
   const problems: string[] = [];
+  const approvedUrls: string[] = [];
   try {
     await mutateDb(`portal: ${decisions.length} decision${decisions.length === 1 ? "" : "s"}`, (db) => {
       for (const k of Object.keys(tally) as Action[]) tally[k] = 0;
       problems.length = 0;
+      approvedUrls.length = 0;
       const queue = new Map(db.queue.map((q) => [q.id, q]));
       const library = new Map(db.library.map((e) => [e.id, e]));
       const rejected = new Set(db.rejected);
@@ -82,6 +85,7 @@ export async function POST(req: Request) {
           ...(merged.submitter ? { submitter: merged.submitter } : {}),
         };
         library.set(id, entry);
+        approvedUrls.push(entry.url);
         queue.delete(q.id);
         tally.approve++;
       }
@@ -91,5 +95,11 @@ export async function POST(req: Request) {
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 503 });
   }
+  // ask the capture service to start on newly approved links now; by the time anyone opens them, it's done
+  after(async () => {
+    const urls = approvedUrls.slice(0, 60);
+    for (let i = 0; i < urls.length; i += 6)
+      await Promise.allSettled(urls.slice(i, i + 6).map((u) => fetch(shotUrl(u), { signal: AbortSignal.timeout(8000) })));
+  });
   return NextResponse.json({ ok: true, tally, problems });
 }

@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import Card, { Favicon, KIND_LABEL } from "@/components/Card";
 import { Footer, Top } from "@/components/Chrome";
 import { ArrowIcon } from "@/components/Icons";
+import Shot from "@/components/Shot";
 import { findEntry, loadLibrary, related, SITE, toRow } from "@/lib/library";
 import { branchColor, findBranch, findSub, hostOf } from "@/lib/taxonomy.mjs";
 
@@ -76,9 +77,7 @@ export default async function EntryPage({ params }: Props) {
           </div>
           <a className="shot" href={visit} target="_blank" rel="noopener" aria-label={`Preview of ${e.name}`}>
             <div className="chrome"><i /><i /><i /><span>{host}</span></div>
-            {/* Free screenshot service; the frame stays elegant if it is slow. */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={`https://s0.wp.com/mshots/v1/${encodeURIComponent(e.url)}?w=1200&h=750`} alt="" loading="lazy" />
+            <Shot url={e.url} host={host} color={color} />
           </a>
         </div>
         {rel.length > 0 && (
