@@ -1,87 +1,30 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import Footer from "../components/Footer";
+import { Footer, REPO, Top } from "@/components/Chrome";
 
-export const metadata: Metadata = {
-  title: "About — AI Tree Library",
-  description: "A living 3D constellation of curated AI tools, design inspiration & creative resources, hand-picked by Elliot Daemon.",
-  alternates: { canonical: "/about" },
-};
+export const metadata: Metadata = { title: "How it works", description: "AI Tree Library is an open-source, community-built library of useful links. How it is built, reviewed and shared.", alternates: { canonical: "/about" } };
 
-export default function AboutPage() {
+export default function About() {
   return (
-    <main className="legal-page">
-      <header className="legal-topbar">
-        <Link href="/" className="legal-back">← Back to constellation</Link>
-      </header>
-
-      <article>
-        <h1>About</h1>
-
-        <p>
-          <strong>AI Tree Library</strong> is a hand-curated 3D constellation of AI tools, design
-          inspiration, and creative resources. Every glowing node in the constellation is a real
-          link — discovered, vetted, and tagged before it earns its place.
-        </p>
-
-        <h2>Why this exists</h2>
-        <p>
-          AI moves too fast for static lists. The cool tool you found today is buried under a
-          hundred newer ones tomorrow. So instead of a list that scrolls, we made a tree you can
-          fly through — categories branch outward, hidden gems sparkle, and you discover things
-          by wandering rather than searching.
-        </p>
-        <p>
-          Underneath the visual: <strong>303+</strong> entries across <strong>19</strong> top-level
-          categories and <strong>~50</strong> subcategories, with four rarity tiers (Legendary,
-          Established, Rare, Hidden Gem). Anyone can submit a tool through the public form. Every
-          submission is reviewed by hand.
-        </p>
-
-        <h2>How it's built</h2>
-        <p>
-          The library is stored in Notion. A nightly build pulls it, computes the 3D constellation
-          layout, and ships it to Vercel's edge as a static site. The 3D scene is built with
-          React Three Fiber. The font on the wordmark is{" "}
-          <a href="https://fonts.google.com/specimen/Josefin+Sans" target="_blank" rel="noopener noreferrer">
-            Josefin Sans
-          </a>{" "}
-          — the same one used on{" "}
-          <a href="https://elliotdaemon.com" target="_blank" rel="noopener noreferrer">
-            elliotdaemon.com
-          </a>.
-        </p>
-
-        <h2>Who's behind it</h2>
-        <p>
-          Designed and built by{" "}
-          <a href="https://elliotdaemon.com" target="_blank" rel="noopener noreferrer">
-            Elliot Daemon
-          </a>{" "}
-          — independent creative technologist, label owner (11:11 RECORDS), and operator of{" "}
-          <a href="https://elliotdaemon.com" target="_blank" rel="noopener noreferrer">
-            ELLIOT DAEMON®
-          </a>. The library started as a personal bookmark folder and became the constellation.
-        </p>
-
-        <h2>Add a tool</h2>
-        <p>
-          Tap the <strong>+ Submit</strong> button in the floating control blob, or paste a URL
-          into the form. Approved submissions show up in the constellation within a day.
-        </p>
-
-        <h2>Get in touch</h2>
-        <p>
-          For correspondence:{" "}
-          <a href="https://elliotdaemon.com" target="_blank" rel="noopener noreferrer">elliotdaemon.com</a>{" "}
-          ·{" "}
-          <a href="https://github.com/ElliotDaemon/ai-tree-library" target="_blank" rel="noopener noreferrer">
-            GitHub
-          </a>
-        </p>
-      </article>
-
+    <>
+      <Top />
+      <main className="wrap page">
+        <article className="prose">
+          <div className="eyebrow">About</div>
+          <h1>A library, grown in the open</h1>
+          <p>AI Tree Library collects the parts of the internet worth knowing: websites, AI tools, iOS and Android apps, widgets and browser extensions. Anyone can add to it. A person reviews every link before it goes live.</p>
+          <h2>How it works</h2>
+          <p>The whole library is three JSON files in a public <a href={REPO} target="_blank" rel="noreferrer">GitHub repository</a>. The site is built from them and served as static pages, so it costs nothing to run and nothing can take it down. There is no paid API and no AI bill: new links are described from their own page metadata and sorted into branches by a small open classifier.</p>
+          <h2>Contribute</h2>
+          <p><Link href="/submit">Submit a link</Link> from the site, or open a pull request that adds a line to <code>data/queue.json</code>. Either way it lands in the review queue.</p>
+          <h2>Use the data</h2>
+          <p>Everything is open under CC0. Fetch <a href="/api/library.json">/api/library.json</a> for the full dataset or <a href="/api/index.json">/api/index.json</a> for a compact index. AI agents can read <a href="/llms.txt">/llms.txt</a>.</p>
+          <h2>The tree</h2>
+          <p>The field on the home page draws every link as a point. Branches are packed outward on a golden-angle spiral and links grow inside them as a sunflower does, so the picture stays balanced however large the library gets.</p>
+          <p style={{ marginTop: 40 }} className="muted">An 11:11 project.</p>
+        </article>
+      </main>
       <Footer />
-    </main>
+    </>
   );
 }

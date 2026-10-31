@@ -1,65 +1,38 @@
-import type { Metadata } from "next";
-import { Geist, Geist_Mono, Josefin_Sans, Spectral } from "next/font/google";
+import type { Metadata, Viewport } from "next";
+import { Geist, Geist_Mono } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
-// Josefin Sans = the wordmark font on elliotdaemon.com — geometric thin
-// sans with triangular A and perfect-circle O. Used for the credit mark.
-const josefinSans = Josefin_Sans({
-  variable: "--font-wordmark",
-  weight: ["300"],
-  subsets: ["latin"],
-});
-
-// Spectral = the editorial serif used on tool/category/rarity/tag pages.
-// Chosen for: low-contrast strokes that read well at body size, generous
-// x-height for legibility, three weights covering display + body + italic.
-// Same vibe as Stratechery / The Atlantic — measured, serious, considered.
-const spectral = Spectral({
-  variable: "--font-serif",
-  weight: ["400", "500", "700"],
-  style: ["normal", "italic"],
-  subsets: ["latin"],
-});
+const geist = Geist({ variable: "--font-geist", subsets: ["latin"] });
+const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "AI Tree Library — A 3D constellation of AI tools, design inspo & creative resources",
-  description:
-    "A hand-curated web library rendered as a navigable 3D constellation. Explore AI tools, design inspiration, and creative resources floating in dark space.",
   metadataBase: new URL("https://aitreelibrary.com"),
-  openGraph: {
-    // The opengraph-image is set automatically by Next.js from app/opengraph-image.tsx
-    title: "AI Tree Library",
-    description: "A 3D constellation of curated AI tools, design inspo, and creative resources.",
-    url: "https://aitreelibrary.com",
-    siteName: "AI Tree Library",
-    type: "website",
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "AI Tree Library",
-    description: "A 3D constellation of curated AI tools, design inspo, and creative resources.",
-  },
+  title: { default: "AI Tree Library — the open library of the useful internet", template: "%s — AI Tree Library" },
+  description:
+    "An open-source, community-built library of websites, AI tools, apps, widgets and extensions. Every link reviewed by a human. Free, no account, open data.",
+  openGraph: { siteName: "AI Tree Library", type: "website", url: "https://aitreelibrary.com" },
+  twitter: { card: "summary_large_image" },
+  alternates: { canonical: "/" },
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: dark)", color: "#0d0d0e" },
+    { media: "(prefers-color-scheme: light)", color: "#d9d9db" },
+  ],
+};
+
+// Theme before paint: saved choice, else the system's.
+const themeScript = `try{var t=localStorage.getItem('theme')||(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');document.documentElement.dataset.theme=t}catch(e){document.documentElement.dataset.theme='dark'}`;
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} ${josefinSans.variable} ${spectral.variable}`}>
+    <html lang="en" className={`${geist.variable} ${geistMono.variable}`} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+      </head>
       <body>
         {children}
         <Analytics />

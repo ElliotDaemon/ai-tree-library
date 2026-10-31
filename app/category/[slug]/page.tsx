@@ -1,72 +1,57 @@
-// Per-category page: aitreelibrary.com/category/[slug]
-
 import type { Metadata } from "next";
+import Link from "next/link";
 import { notFound } from "next/navigation";
-import {
-  findCategoryBySlug,
-  entriesInTopLevelCategory,
-  subcategoriesOf,
-  getAllCategorySlugs,
-} from "../../../lib/library";
-import CategoryPageBody from "../../components/CategoryPageBody";
-import { CategoryJsonLd, CategoryBreadcrumb } from "../../components/JsonLd";
-import { CategoryViewTracker } from "../../components/PageViewTracker";
+import Card from "@/components/Card";
+import { Footer, Top } from "@/components/Chrome";
+import { loadLibrary, toRow } from "@/lib/library";
+import { BRANCHES, branchColor, findBranch } from "@/lib/taxonomy.mjs";
 
-interface PageProps {
-  params: Promise<{ slug: string }>;
+export const dynamicParams = false;
+export const generateStaticParams = () => BRANCHES.map((b) => ({ slug: b.id }));
+
+type Props = { params: Promise<{ slug: string }> };
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const b = findBranch((await params).slug);
+  return b ? { title: b.name, description: `${b.name}: ${b.blurb} Curated by people, free to use.`, alternates: { canonical: `/category/${b.id}` } } : {};
 }
 
-export async function generateStaticParams() {
-  const slugs = await getAllCategorySlugs();
-  return slugs.map((slug) => ({ slug }));
-}
-
-export const dynamicParams = true;
-
-export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
-  const { slug } = await params;
-  const category = await findCategoryBySlug(slug);
-  if (!category) return { title: "Not found — AI Tree Library" };
-
-  const entries = await entriesInTopLevelCategory(slug);
-  const description =
-    (category.description ||
-      `Curated ${category.name.toLowerCase()} tools and resources in the AI Tree Library — ${entries.length} hand-picked entries.`)
-      .replace(/\s+/g, " ")
-      .trim()
-      .slice(0, 160);
-
-  return {
-    title: `${category.name} — AI Tree Library`,
-    description,
-    alternates: { canonical: `/category/${category.slug}` },
-    openGraph: {
-      title: `${category.name} — curated tools`,
-      description,
-      url: `/category/${category.slug}`,
-      siteName: "AI Tree Library",
-      type: "website",
-    },
-    twitter: { card: "summary_large_image", title: `${category.name} — AI Tree Library`, description },
-  };
-}
-
-export default async function CategoryPage({ params }: PageProps) {
-  const { slug } = await params;
-  const category = await findCategoryBySlug(slug);
-  if (!category) notFound();
-
-  const [subcategories, entries] = await Promise.all([
-    subcategoriesOf(slug),
-    entriesInTopLevelCategory(slug),
-  ]);
-
+export default async function BranchPage({ params }: Props) {
+  const b = findBranch((await params).slug);
+  if (!b) notFound();
+  const color = branchColor(b.id);
+  const items = (await loadLibrary()).filter((e) => e.branch === b.id);
+  const groups = b.subs.map((s) => ({ ...s, items: items.filter((e) => e.sub === s.id) })).filter((g) => g.items.length);
   return (
     <>
-      <CategoryJsonLd category={category} entries={entries} />
-      <CategoryBreadcrumb category={category} />
-      <CategoryViewTracker slug={category.slug} name={category.name} />
-      <CategoryPageBody category={category} subcategories={subcategories} entries={entries} />
+      <Top />
+      <main className="wrap page">
+        <nav className="crumbs"><Link href="/">Library</Link><span>/</span><span>{b.name}</span></nav>
+        <div className="prose" style={{ maxWidth: 760 }}>
+          <div className="eyebrow" style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <span className="swatch" style={{ "--c": color } as React.CSSProperties} /> Branch · {items.length} links
+          </div>
+          <h1>{b.name}</h1>
+          <p>{b.blurb}</p>
+        </div>
+        <div className="rail" style={{ margin: "8px -20px 10px" }}>
+          {groups.map((g) => <a key={g.id} href={`#${g.id}`} className="pill sm">{g.name} <span className="n">{g.items.length}</span></a>)}
+        </div>
+        {groups.length === 0 && (
+          <div className="empty glass" style={{ marginTop: 24 }}>
+            <h2>Nothing here yet</h2>
+            <p>This branch is waiting for its first link.</p>
+            <p style={{ marginTop: 18 }}><Link className="pill accent" href="/submit">Submit one</Link></p>
+          </div>
+        )}
+        {groups.map((g) => (
+          <section key={g.id} id={g.id} className="section" style={{ paddingBottom: 0, scrollMarginTop: 80 }}>
+            <h2 style={{ fontSize: 20, marginBottom: 16 }}>{g.name} <span className="muted mono" style={{ fontSize: 13 }}>{g.items.length}</span></h2>
+            <div className="grid">{g.items.map((e) => <Card key={e.id} row={toRow(e)} color={color} subName={g.name} />)}</div>
+          </section>
+        ))}
+      </main>
+      <Footer />
     </>
   );
 }

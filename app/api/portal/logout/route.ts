@@ -4,7 +4,7 @@
 // only (CSRF-resistant — a stray GET image tag can't log you out).
 
 import { NextResponse } from "next/server";
-import { SESSION_COOKIE } from "@/lib/portal-auth";
+import { SESSION_COOKIE } from "@/lib/auth";
 
 export const runtime = "edge";
 

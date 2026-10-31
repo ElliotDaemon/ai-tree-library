@@ -1,84 +1,28 @@
 import type { Metadata } from "next";
-import Link from "next/link";
-import Footer from "../components/Footer";
+import { Footer, Top } from "@/components/Chrome";
 
-export const metadata: Metadata = {
-  title: "Privacy — AI Tree Library",
-  description: "What data we collect, why, and how to opt out. AI Tree Library is privacy-friendly by design.",
-  alternates: { canonical: "/privacy" },
-};
+export const metadata: Metadata = { title: "Privacy", description: "What AI Tree Library collects (very little) and why.", alternates: { canonical: "/privacy" } };
 
-export default function PrivacyPage() {
+export default function Privacy() {
   return (
-    <main className="legal-page">
-      <header className="legal-topbar">
-        <Link href="/" className="legal-back">← Back to constellation</Link>
-      </header>
-
-      <article>
-        <h1>Privacy Policy</h1>
-        <p className="legal-updated">Last updated: 22 May 2026</p>
-
-        <p>
-          AI Tree Library is a curated, mostly-static directory. We try to collect as little as
-          possible while still being able to improve the site.
-        </p>
-
-        <h2>What we collect</h2>
-        <ul>
-          <li>
-            <strong>Aggregated analytics</strong> via Vercel Analytics — anonymized page views,
-            referrers, country, device type. Cookieless. Cannot identify individual visitors.
-          </li>
-          <li>
-            <strong>Performance metrics</strong> via Vercel Speed Insights — page load times,
-            web vitals. Cookieless.
-          </li>
-          <li>
-            <strong>Custom usage events</strong> — when you click a tool, run a search, or open a
-            filter, we log the event (e.g. <code>tool_view: chatgpt</code>) so we can see which
-            tools and categories get the most attention. No IP or personal identifier is attached.
-          </li>
-          <li>
-            <strong>Public submissions</strong> — if you submit a tool via the form, we record
-            the URL, optional name/handle, and optional email. The email is used only to follow
-            up if needed and is never shown publicly.
-          </li>
-        </ul>
-
-        <h2>What we DON'T collect</h2>
-        <ul>
-          <li>No tracking cookies.</li>
-          <li>No third-party advertising trackers.</li>
-          <li>No fingerprinting.</li>
-          <li>No data sold to anyone.</li>
-        </ul>
-
-        <h2>Third parties</h2>
-        <p>
-          The site is hosted on <a href="https://vercel.com" target="_blank" rel="noopener noreferrer">Vercel</a>.
-          Content is managed through <a href="https://notion.so" target="_blank" rel="noopener noreferrer">Notion</a>.
-          Submissions optionally pass through <a href="https://anthropic.com" target="_blank" rel="noopener noreferrer">Anthropic</a> for
-          automatic classification. Each has its own privacy policy.
-        </p>
-
-        <h2>External links</h2>
-        <p>
-          Every entry in the library is an external website operated by a third party. We do not
-          endorse them and have no control over their content or privacy practices.
-        </p>
-
-        <h2>Contact</h2>
-        <p>
-          Curated by <a href="https://elliotdaemon.com" target="_blank" rel="noopener noreferrer">Elliot Daemon</a>.
-          Questions or removal requests: open an issue at{" "}
-          <a href="https://github.com/ElliotDaemon/ai-tree-library" target="_blank" rel="noopener noreferrer">
-            github.com/ElliotDaemon/ai-tree-library
-          </a>.
-        </p>
-      </article>
-
+    <>
+      <Top />
+      <main className="wrap page">
+        <article className="prose">
+          <div className="eyebrow">Last updated 31 October 2026</div>
+          <h1>Privacy</h1>
+          <p>No accounts, no cookies for visitors, no selling of anything.</p>
+          <h2>Analytics</h2>
+          <p>Vercel Web Analytics counts anonymous page views without cookies. Speed Insights measures how fast pages load.</p>
+          <h2>Submissions</h2>
+          <p>When you submit a link we store the link, the details you typed and the optional credit handle in the public repository, because the review queue is public. Do not put anything private in a submission. We never ask for an email address.</p>
+          <h2>Third parties</h2>
+          <p>Site icons load from DuckDuckGo&apos;s icon service and page previews from WordPress.com&apos;s screenshot service. They see the address of the site being shown, not who you are beyond what any image request reveals.</p>
+          <h2>Contact</h2>
+          <p>Open an issue on GitHub to ask for anything to be removed.</p>
+        </article>
+      </main>
       <Footer />
-    </main>
+    </>
   );
 }
