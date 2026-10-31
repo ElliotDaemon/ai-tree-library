@@ -4,7 +4,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import Card, { KIND_LABEL } from "./Card";
+import dynamic from "next/dynamic";
 import Field, { type FieldBranch } from "./Field";
+
+// three.js only loads in the browser, after the page is interactive
+const Field3D = dynamic(() => import("./Field3D"), { ssr: false, loading: () => <div className="f3-slot"><section className="stage f3" /></div> });
 import { SearchIcon } from "./Icons";
 import type { Row } from "@/lib/types";
 
@@ -114,17 +118,34 @@ export default function Explorer({ branches, initial, total }: { branches: Branc
   }, [more, results.length]);
 
   const live = rows.length;
-  return (
+  const copy = (
     <>
-      <section className="stage">
-        <Field rows={rows} branches={fieldBranches} match={match} focus={branch} />
-        <div className="veil" />
-        <div className="copy">
-          <div className="eyebrow">Open source · open data · built by everyone</div>
+      <div className="eyebrow">Open source · open data · built by everyone</div>
           <h1>The open library of<br />the useful internet</h1>
           <p className="lede">Grown in the open. Shared with everyone. Websites, AI tools, apps and extensions that anyone can add to, take from and build on.</p>
-        </div>
-      </section>
+    </>
+  );
+  return (
+    <>
+      <Field3D
+        rows={rows}
+        branches={fieldBranches}
+        match={match}
+        focus={branch}
+        query={q}
+        onQuery={setQ}
+        subName={(r) => subName.get(`${r.b}/${r.s}`) || ""}
+        fallback={
+          <section className="stage">
+            <Field rows={rows} branches={fieldBranches} match={match} focus={branch} />
+            <div className="veil" />
+            <div className="copy">{copy}</div>
+          </section>
+        }
+      >
+        {copy}
+      </Field3D>
+
 
       <div className="finder">
         <label>
