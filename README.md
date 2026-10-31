@@ -31,4 +31,6 @@ npm run import-bookmarks -- ~/Downloads/bookmarks.html   # Chrome export → que
 | `GITHUB_BRANCH` | Optional. Defaults to the deployed branch. |
 | `TURNSTILE_SECRET_KEY` | Optional spam guard. Honeypot and rate limits work without it. |
 
+No other env vars are used: `NOTION_TOKEN`, `ADMIN_TOKEN`, `VERCEL_TOKEN`/`VERCEL_TEAM_ID`/`VERCEL_PROJECT_ID` and the Blob store belong to v2 and can be removed once v3 is on `main`.
+
 Data is CC0. An 11:11 project.
