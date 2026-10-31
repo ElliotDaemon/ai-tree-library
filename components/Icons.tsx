@@ -14,13 +14,13 @@ export const GitIcon = (p: P) => <S {...p}><circle cx="6" cy="5" r="1.8" /><circ
 export const CheckIcon = (p: P) => <S {...p}><path d="m4.5 10.5 3.5 3.5 7.5-8" /></S>;
 export const XIcon = (p: P) => <S {...p}><path d="m5.5 5.5 9 9M14.5 5.5l-9 9" /></S>;
 
-/** The library's own mark: a trunk splitting into a crown of nodes. */
+/** The library's own mark (same geometry as lib/mark.ts, without the tile). */
 export const Mark = ({ size = 22 }: P) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden className="brand-mark">
-    <path d="M12 21v-7m0 0-4.5-4.5M12 14l4.5-4.5M12 14V7" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" opacity=".55" />
-    <circle cx="12" cy="5.5" r="2" fill="currentColor" />
-    <circle cx="6.5" cy="8.5" r="1.6" fill="var(--accent)" />
-    <circle cx="17.5" cy="8.5" r="1.6" fill="currentColor" opacity=".8" />
-    <circle cx="12" cy="21" r="1.1" fill="currentColor" opacity=".5" />
+  <svg width={size} height={size} viewBox="4 6 56 54" fill="none" aria-hidden className="brand-mark">
+    <path d="M32 54V38M32 38 20 25M32 38 44 25M32 38V18" stroke="currentColor" strokeOpacity=".55" strokeWidth="3.4" strokeLinecap="round" />
+    <circle cx="32" cy="15" r="6" fill="currentColor" />
+    <circle cx="18" cy="22.5" r="5" fill="var(--accent)" />
+    <circle cx="46" cy="22.5" r="5" fill="currentColor" fillOpacity=".8" />
+    <circle cx="32" cy="55" r="3.4" fill="currentColor" fillOpacity=".45" />
   </svg>
 );
