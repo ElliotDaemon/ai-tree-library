@@ -40,7 +40,7 @@ export default async function OG() {
           </div>
           <div style={{ display: "flex", flexDirection: "column" }}>
             <div style={{ fontSize: 68, lineHeight: 1.02, letterSpacing: -2.5, fontWeight: 700 }}>The open library of the useful internet</div>
-            <div style={{ fontSize: 24, color: "#9c9c9a", marginTop: 22, lineHeight: 1.4 }}>Websites, AI tools, apps and extensions. Found by people, approved by a person.</div>
+            <div style={{ fontSize: 24, color: "#9c9c9a", marginTop: 22, lineHeight: 1.4 }}>Grown in the open. Shared with everyone.</div>
           </div>
           <div style={{ display: "flex", gap: 14, fontSize: 18, color: "#9c9c9a" }}>
             <span style={{ padding: "8px 18px", borderRadius: 999, border: "1px solid rgba(255,255,255,.14)" }}>{lib.length ? `${lib.length.toLocaleString("en")} links` : "Open source"}</span>

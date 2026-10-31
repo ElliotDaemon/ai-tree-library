@@ -1,6 +1,6 @@
 # AI Tree Library
 
-The open library of the useful internet: websites, AI tools, iOS and Android apps, widgets and browser extensions, found by people and approved by a person. Live at [aitreelibrary.com](https://aitreelibrary.com).
+The open library of the useful internet. **Grown in the open. Shared with everyone.** Websites, AI tools, iOS and Android apps, widgets and browser extensions that anyone can add to, use, fork and build on. Live at [aitreelibrary.com](https://aitreelibrary.com).
 
 ## How it works
 

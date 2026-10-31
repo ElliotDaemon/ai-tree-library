@@ -11,8 +11,8 @@ export default function About() {
       <main className="wrap page">
         <article className="prose">
           <div className="eyebrow">About</div>
-          <h1>A library, grown in the open</h1>
-          <p>AI Tree Library collects the parts of the internet worth knowing: websites, AI tools, iOS and Android apps, widgets and browser extensions. Anyone can add to it. A person reviews every link before it goes live.</p>
+          <h1>Grown in the open. Shared with everyone.</h1>
+          <p>AI Tree Library collects the parts of the internet worth knowing: websites, AI tools, iOS and Android apps, widgets and browser extensions. Anyone can plant a link, anyone can take the whole tree: the code is open source and every entry is free data. A curator keeps it clean, so what grows here stays worth sharing.</p>
           <h2>How it works</h2>
           <p>The whole library is three JSON files in a public <a href={REPO} target="_blank" rel="noreferrer">GitHub repository</a>. The site is built from them and served as static pages, so it costs nothing to run and nothing can take it down. There is no paid API and no AI bill: new links are described from their own page metadata and sorted into branches by a small open classifier.</p>
           <h2>Contribute</h2>

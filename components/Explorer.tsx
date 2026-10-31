@@ -120,9 +120,9 @@ export default function Explorer({ branches, initial, total }: { branches: Branc
         <Field rows={rows} branches={fieldBranches} match={match} focus={branch} />
         <div className="veil" />
         <div className="copy">
-          <div className="eyebrow">Open source · community built · human reviewed</div>
+          <div className="eyebrow">Open source · open data · built by everyone</div>
           <h1>The open library of<br />the useful internet</h1>
-          <p className="lede">Websites, AI tools, apps, widgets and extensions worth knowing, each one found by a person and approved by a person.</p>
+          <p className="lede">Grown in the open. Shared with everyone. Websites, AI tools, apps and extensions that anyone can add to, take from and build on.</p>
         </div>
       </section>
 

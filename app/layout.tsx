@@ -11,7 +11,7 @@ export const metadata: Metadata = {
   metadataBase: new URL("https://aitreelibrary.com"),
   title: { default: "AI Tree Library — the open library of the useful internet", template: "%s — AI Tree Library" },
   description:
-    "An open-source, community-built library of websites, AI tools, apps, widgets and extensions. Every link reviewed by a human. Free, no account, open data.",
+    "Grown in the open. Shared with everyone. An open-source library of websites, AI tools, apps, widgets and extensions that anyone can add to, use, fork and build on.",
   openGraph: { siteName: "AI Tree Library", type: "website", url: "https://aitreelibrary.com" },
   twitter: { card: "summary_large_image" },
   alternates: { canonical: "/" },

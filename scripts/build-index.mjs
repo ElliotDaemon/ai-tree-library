@@ -23,7 +23,7 @@ await mkdir(join(PUB, "api"), { recursive: true });
 await writeFile(join(PUB, "api", "index.json"), JSON.stringify(rows));
 await writeFile(join(PUB, "api", "library.json"), JSON.stringify({ license: "CC0-1.0", generatedAt: new Date().toISOString(), count: library.length, branches: BRANCHES.map(({ id, name, subs }) => ({ id, name, subs: subs.map(({ id, name }) => ({ id, name })) })), entries: library }, null, 1));
 
-const lines = ["# AI Tree Library", "", "> An open-source, community-built library of websites, tools, apps and extensions. Every link is reviewed by a human.", "", `Dataset: https://aitreelibrary.com/api/library.json (${library.length} entries, CC0)`, ""];
+const lines = ["# AI Tree Library", "", "> Grown in the open. Shared with everyone. An open-source library of websites, tools, apps and extensions; the full dataset is CC0.", "", `Dataset: https://aitreelibrary.com/api/library.json (${library.length} entries, CC0)`, ""];
 for (const b of BRANCHES) {
   const items = library.filter((e) => e.branch === b.id);
   if (!items.length) continue;
