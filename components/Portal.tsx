@@ -1,5 +1,5 @@
 "use client";
-// The review desk. Every link waits here until a person approves it.
+// The review desk. Every link waits here until the 11:11 team approves it.
 // Decisions are staged locally (and survive a reload), then land as ONE commit.
 //   J/K or ↑/↓ move · A approve · D decline · S later · X select · ⇧A approve selected
 //   E edit name · O open link · U undo · / search · ⌘↵ commit

@@ -73,7 +73,7 @@ export default function SubmitForm({ branches }: { branches: B[] }) {
           <div className="two">
             <label className="field"><span>Branch</span>
               <select className="select" value={form.branch} onChange={(e) => { set("branch", e.target.value); set("sub", ""); }}>
-                <option value="">Let the reviewer decide</option>
+                <option value="">Let the 11:11 team decide</option>
                 {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
               </select>
             </label>
@@ -86,7 +86,7 @@ export default function SubmitForm({ branches }: { branches: B[] }) {
           </div>
           <div className="two">
             <label className="field"><span>Credit (optional)</span><input className="input" placeholder="@handle" value={form.submitter} onChange={(e) => set("submitter", e.target.value)} maxLength={60} /></label>
-            <label className="field"><span>Note to the reviewer (optional)</span><input className="input" value={form.note} onChange={(e) => set("note", e.target.value)} maxLength={280} /></label>
+            <label className="field"><span>Note to the 11:11 team (optional)</span><input className="input" value={form.note} onChange={(e) => set("note", e.target.value)} maxLength={280} /></label>
           </div>
           <input className="hp" tabIndex={-1} autoComplete="off" aria-hidden value={form.website} onChange={(e) => set("website", e.target.value)} name="website" />
           <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 8, flexWrap: "wrap" }}>

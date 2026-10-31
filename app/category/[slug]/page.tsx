@@ -13,7 +13,7 @@ type Props = { params: Promise<{ slug: string }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const b = findBranch((await params).slug);
-  return b ? { title: b.name, description: `${b.name}: ${b.blurb} Curated by people, free to use.`, alternates: { canonical: `/category/${b.id}` } } : {};
+  return b ? { title: b.name, description: `${b.name}: ${b.blurb} Curated by the 11:11 team, open to everyone.`, alternates: { canonical: `/category/${b.id}` } } : {};
 }
 
 export default async function BranchPage({ params }: Props) {

@@ -19,7 +19,7 @@ export default function Privacy() {
           <h2>Third parties</h2>
           <p>Site icons load from DuckDuckGo&apos;s icon service and page previews from WordPress.com&apos;s screenshot service. They see the address of the site being shown, not who you are beyond what any image request reveals.</p>
           <h2>Contact</h2>
-          <p>Open an issue on GitHub to ask for anything to be removed.</p>
+          <p>Open an issue on GitHub and the 11:11 team will remove anything you ask.</p>
         </article>
       </main>
       <Footer />

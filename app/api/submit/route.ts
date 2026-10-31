@@ -67,6 +67,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "The library couldn't take submissions right now." }, { status: 503 });
   }
   if (status === "exists") return NextResponse.json({ ok: true, status, message: "Already in the library or waiting for review." });
-  if (status === "declined") return NextResponse.json({ ok: true, status, message: "This one was reviewed before and isn't a fit." });
-  return NextResponse.json({ ok: true, status, message: "Received. It goes live once it's reviewed." });
+  if (status === "declined") return NextResponse.json({ ok: true, status, message: "The 11:11 team reviewed this one before and passed on it." });
+  return NextResponse.json({ ok: true, status, message: "Received. It goes live once the 11:11 team approves it." });
 }

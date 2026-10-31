@@ -185,7 +185,7 @@ export default function Explorer({ branches, initial, total }: { branches: Branc
         ) : (
           <div className="empty glass">
             <h2>{live ? "Nothing matches that yet" : "The library is being re-curated"}</h2>
-            <p>{live ? "Know a link that should be here? Add it." : "Every link is being reviewed again by hand. Approved links appear here as they land."}</p>
+            <p>{live ? "Know a link that should be here? Add it." : "The 11:11 team is reviewing every link again. Approved links appear here as they land."}</p>
             <p style={{ marginTop: 18 }}><Link className="pill accent" href="/submit">Submit a link</Link></p>
           </div>
         )}
