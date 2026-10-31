@@ -2,8 +2,8 @@
 // A site preview that never shows someone else's loading screen.
 // The free capture service (WordPress mShots) answers with a small "Generating preview" placeholder
 // until its screenshot is ready; a real capture comes back at the width we asked for. So: load quietly
-// in the background, show our own glass skeleton meanwhile, retry with backoff, and fall back to the
-// site's icon on a branch-tinted field if it never arrives.
+// in the background, show our own glass skeleton meanwhile, retry with backoff, and if it never arrives
+// (many sites block capture) say so quietly over the site's icon.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { shotUrl } from "@/lib/shot";
 
@@ -46,8 +46,14 @@ export default function Shot({ url, host, color = "#3987e5", width = 1200, heigh
 
   useEffect(() => {
     const stop = load();
-    return () => { stop?.(); run.current++; };
-  }, [load]);
+    // in parallel: if the site shows bot checks, a capture would be of the check page, so never show it
+    const ctrl = new AbortController();
+    fetch(`/api/shot-check?url=${encodeURIComponent(url)}`, { signal: ctrl.signal })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d?.blocked) { run.current++; setSrc(null); setState("failed"); } })
+      .catch(() => {});
+    return () => { stop?.(); ctrl.abort(); run.current++; };
+  }, [load, url]);
 
   return (
     <div className={`shot-body ${state} ${className}`} style={{ "--c": color } as React.CSSProperties} aria-busy={state === "loading"}>
@@ -57,9 +63,10 @@ export default function Shot({ url, host, color = "#3987e5", width = 1200, heigh
             {host.slice(0, 1).toUpperCase()}
             <i style={{ backgroundImage: `url(https://icons.duckduckgo.com/ip3/${host}.ico)` }} />
           </span>
-          <span className="mono">{state === "failed" ? "No preview yet" : "Capturing preview"}</span>
-          {state === "failed" && (
-            <span role="button" tabIndex={0} className="pill sm" onClick={(e) => { e.preventDefault(); e.stopPropagation(); load(); }} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); load(); } }}>Try again</span>
+          {state === "failed" ? (
+            <span className="mono">Preview unavailable<small>This site doesn&apos;t allow previews</small></span>
+          ) : (
+            <span className="mono">Capturing preview</span>
           )}
         </div>
       )}

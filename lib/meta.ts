@@ -26,7 +26,7 @@ const metaTag = (html: string, key: string) =>
   pick(html, new RegExp(`<meta[^>]+content=["']([^"']*)["'][^>]*(?:name|property)=["']${key}["']`, "i"));
 
 /** Refuse private-network targets so the endpoint can't be used to probe internal hosts. */
-function isPublicHost(host: string) {
+export function isPublicHost(host: string) {
   return !/^(localhost|0\.|10\.|127\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|\[|::1|.*\.local$|.*\.internal$)/i.test(host) && host.includes(".");
 }
 
